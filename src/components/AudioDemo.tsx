@@ -12,6 +12,8 @@ let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
 let pannerNode: PannerNode | null = null;
 let gainNode: GainNode | null = null;
+let filterNode: BiquadFilterNode | null = null;
+let convolverNode: ConvolverNode | null = null;
 
 export default function AudioDemo() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -38,8 +40,6 @@ export default function AudioDemo() {
 
     return () => {
       stopPreview();
-      // Only close the context if this is the last component to use it.
-      // For this simple demo, it's okay, but in a larger app, you might manage context globally.
     };
   }, [toast]);
 
@@ -78,39 +78,107 @@ export default function AudioDemo() {
     buffer.current = newBuffer;
   };
 
-  const getAnimationPath = (time: number) => {
-    const radius = 3;
-    const duration = 8;
-    const angle8d = (time / duration) * 2 * Math.PI;
-    const x = Math.sin(angle8d) * radius;
-    const z = Math.cos(angle8d) * radius;
-    const distance = Math.sqrt(x * x + z * z);
-    const gain = 1 - distance / (radius * 2);
-    return { x, y: 0, z, gain };
+  const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
+    const rate = context.sampleRate;
+    const duration = 2; // seconds
+    const decay = 3;
+    const impulse = context.createBuffer(2, duration * rate, rate);
+    const left = impulse.getChannelData(0);
+    const right = impulse.getChannelData(1);
+
+    for (let i = 0; i < impulse.length; i++) {
+      const n = i / impulse.length;
+      left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+      right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+    }
+    return impulse;
   };
 
-  const startSpatialAnimation = () => {
-    if (!audioContext || !pannerNode || !gainNode) return;
+  const getAnimationPath = (time: number) => {
+    const radius = 3;
+    const zRadius = radius * 1.5;
+    const duration = 8; // Right -> Front -> Left -> Back -> Loop
+    const segmentDuration = duration / 4;
+    const segment = Math.floor((time % duration) / segmentDuration);
+    const segmentTime = (time % duration) - (segment * segmentDuration);
+    const progress = segmentTime / segmentDuration;
+
+    let x = 0, y = 0, z = 0;
+    
+    switch(segment) {
+      case 0: // Right to Front
+        x = radius * (1 - progress);
+        z = -zRadius * progress;
+        break;
+      case 1: // Front to Left
+        x = -radius * progress;
+        z = -zRadius * (1 - progress);
+        break;
+      case 2: // Left to Back
+        x = -radius * (1 - progress);
+        z = zRadius * progress;
+        break;
+      case 3: // Back to Right
+        x = radius * progress;
+        z = zRadius * (1 - progress);
+        break;
+    }
+    const path = { x, y, z };
+
+    const distance = Math.sqrt(path.x*path.x + path.y*path.y + path.z*path.z);
+    const gain = 1 - (distance / (radius * 2));
+    const freq = path.z > 0 ? 3000 + (path.z / zRadius) * 2000 : 5000 - (Math.abs(path.z) / zRadius) * 2000;
+
+    return { ...path, gain, freq };
+  };
+
+  const startSpatialAnimation = async () => {
+    if (!audioContext || !pannerNode || !filterNode || !gainNode) return;
 
     const p = pannerNode;
+    const f = filterNode;
     const g = gainNode;
-    gainNode.connect(p);
+
+    // Disconnect previous connections to be safe
+    g.disconnect();
+    f.disconnect();
+    p.disconnect();
+    if (convolverNode) convolverNode.disconnect();
+
+    if (!convolverNode) {
+        convolverNode = audioContext.createConvolver();
+        convolverNode.buffer = await createReverbImpulseResponse(audioContext);
+    }
+    
+    const dryNode = audioContext.createGain();
+    dryNode.gain.value = 0.6; // Lowered to prevent clipping
+    const wetNode = audioContext.createGain();
+    wetNode.gain.value = 0.2; // Lowered to prevent clipping
+
+    gainNode.connect(dryNode);
+    gainNode.connect(wetNode);
+    wetNode.connect(convolverNode);
+    convolverNode.connect(audioContext.destination);
+    dryNode.connect(f);
+    f.connect(p);
+    
     p.connect(audioContext.destination);
 
     const startTime = audioContext.currentTime;
 
     const animate = () => {
-      if (!audioContext || !p.positionX || !g.gain) {
+      if (!audioContext || !p.positionX || !f.frequency || !g.gain) {
         animationFrameRef.current = undefined;
         return;
       }
 
       const time = audioContext.currentTime - startTime;
-      const { x, y, z, gain: newGain } = getAnimationPath(time);
+      const { x, y, z, gain: newGain, freq } = getAnimationPath(time);
 
       p.positionX.linearRampToValueAtTime(x, audioContext.currentTime + 0.05);
       p.positionY.linearRampToValueAtTime(y, audioContext.currentTime + 0.05);
       p.positionZ.linearRampToValueAtTime(z, audioContext.currentTime + 0.05);
+      f.frequency.linearRampToValueAtTime(freq, audioContext.currentTime + 0.05);
       g.gain.linearRampToValueAtTime(newGain, audioContext.currentTime + 0.05);
 
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -136,6 +204,11 @@ export default function AudioDemo() {
       pannerNode = audioContext.createPanner();
       pannerNode.panningModel = 'HRTF';
       pannerNode.distanceModel = 'inverse';
+
+      filterNode = audioContext.createBiquadFilter();
+      filterNode.type = 'lowpass';
+      filterNode.Q.value = 1;
+      
       if (audioContext.listener.positionX) {
         audioContext.listener.positionX.value = 0;
         audioContext.listener.positionY.value = 0;
@@ -143,7 +216,7 @@ export default function AudioDemo() {
       } else {
         audioContext.listener.setPosition(0, 0, 0);
       }
-      startSpatialAnimation();
+      await startSpatialAnimation();
     } else {
       gainNode.connect(audioContext.destination);
     }
@@ -166,6 +239,8 @@ export default function AudioDemo() {
     }
     gainNode?.disconnect();
     pannerNode?.disconnect();
+    filterNode?.disconnect();
+    if(convolverNode) convolverNode.disconnect();
     setIsPlaying(false);
     setActivePlayer(null);
   };
@@ -189,7 +264,7 @@ export default function AudioDemo() {
       />
       <DemoPlayerCard
         title="After"
-        description="With 8D Spatial Effect"
+        description="11D Effect with Reverb"
         isPlaying={isPlaying && activePlayer === 'after'}
         onTogglePlay={() => togglePlay('after')}
         isEnhanced
