@@ -61,7 +61,7 @@ export default function AudioProcessor({
   const [customMid, setCustomMid] = useState(0);
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
-  const [visualizationType, setVisualizationType] = useState<VisualizationType>('orb');
+  const [visualizationType, setVisualizationType] = useState<VisualizationType>('chromatic');
 
 
   const { toast } = useToast();
@@ -810,6 +810,7 @@ export default function AudioProcessor({
                         <SelectValue placeholder="Select a visualization" />
                     </SelectTrigger>
                     <SelectContent>
+                        <SelectItem value="chromatic">Chromatic Aberration</SelectItem>
                         <SelectItem value="orb">Orb</SelectItem>
                         <SelectItem value="bars">Bars</SelectItem>
                         <SelectItem value="tunnel">Tunnel</SelectItem>

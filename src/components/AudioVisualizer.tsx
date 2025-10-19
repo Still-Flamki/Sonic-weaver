@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, forwardRef } from 'react';
 
-export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'petal' | 'skyline';
+export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'petal' | 'skyline' | 'chromatic';
 
 interface AudioVisualizerProps {
   analyserNode: AnalyserNode | null;
@@ -275,6 +275,61 @@ const drawSkyline = (
   }
 };
 
+const drawChromatic = (
+    ctx: CanvasRenderingContext2D,
+    analyser: AnalyserNode,
+    dataArray: Uint8Array,
+    width: number,
+    height: number
+  ) => {
+    analyser.getByteTimeDomainData(dataArray);
+    ctx.fillStyle = 'rgba(10, 18, 28, 1)';
+    ctx.fillRect(0, 0, width, height);
+  
+    const bufferLength = dataArray.length;
+    const sliceWidth = width * 1.0 / bufferLength;
+    const centerY = height / 2;
+  
+    const volume = dataArray.reduce((sum, val) => sum + Math.abs(val - 128), 0) / bufferLength;
+    const aberrationAmount = Math.pow(volume / 50, 2) * (width * 0.05);
+
+    const highFreqData = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(highFreqData);
+    const highFreqEnergy = highFreqData.slice(highFreqData.length / 2).reduce((sum, val) => sum + val, 0) / (highFreqData.length / 2);
+    const verticalJitter = Math.pow(highFreqEnergy / 100, 2) * (height * 0.05);
+  
+    // --- Draw the 3 color channels ---
+    const channels = [
+      { color: 'rgb(0, 255, 255)', offset: -aberrationAmount, yOffset: 0 }, // Cyan
+      { color: 'rgb(255, 0, 255)', offset: 0, yOffset: verticalJitter }, // Magenta
+      { color: 'rgb(255, 255, 0)', offset: aberrationAmount, yOffset: -verticalJitter }, // Yellow
+    ];
+  
+    ctx.lineWidth = 3;
+    ctx.globalCompositeOperation = 'lighter'; // Additive blending for bright colors
+  
+    channels.forEach(channel => {
+      ctx.strokeStyle = channel.color;
+      ctx.beginPath();
+      let x = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = v * height / 2 + channel.yOffset;
+  
+        if (i === 0) {
+          ctx.moveTo(x + channel.offset, y);
+        } else {
+          ctx.lineTo(x + channel.offset, y);
+        }
+  
+        x += sliceWidth;
+      }
+      ctx.stroke();
+    });
+    
+    ctx.globalCompositeOperation = 'source-over'; // Reset composite operation
+  };
+
 
 // Main component
 const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
@@ -298,8 +353,8 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     if(!canvasCtx) return;
 
     // Different visualizers prefer different data
-    if (visualizationType === 'orb' || visualizationType === 'petal') {
-        analyserNode.fftSize = 512;
+    if (['orb', 'petal', 'chromatic'].includes(visualizationType)) {
+        analyserNode.fftSize = 1024;
     } else { // bars, tunnel, skyline
         analyserNode.fftSize = 256;
     }
@@ -339,6 +394,9 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
             break;
         case 'skyline':
             drawSkyline(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
+            break;
+        case 'chromatic':
+            drawChromatic(canvasCtx, analyserNode, dataArray, width, height);
             break;
         default:
           // Clear canvas if type is unknown
