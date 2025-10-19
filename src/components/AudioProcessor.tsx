@@ -58,8 +58,6 @@ export default function AudioProcessor({
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const animationFrameRef = useRef<number>();
-  const visualizerCanvasRef = useRef<HTMLCanvasElement>(null);
-  const freqDataRef = useRef<Uint8Array | null>(null);
   
   const [customSpeed, setCustomSpeed] = useState(8);
   const [customWidth, setCustomWidth] = useState(3);
@@ -88,7 +86,6 @@ export default function AudioProcessor({
 
         analyserNode = audioContext.createAnalyser();
         analyserNode.fftSize = 256; // Smaller size for faster analysis
-        freqDataRef.current = new Uint8Array(analyserNode.frequencyBinCount);
 
       } catch (e) {
         setError('Web Audio API is not supported in this browser.');
@@ -197,38 +194,31 @@ export default function AudioProcessor({
         duration = 16 - customSpeed; // Inverse relationship: higher speed value means shorter duration
     }
 
-    if (currentEffect === 'Reactive' && freqDataRef.current && analyserNode) {
-      analyserNode.getByteFrequencyData(freqDataRef.current);
-      const rawBass = freqDataRef.current.slice(0, 8).reduce((s, v) => s + v, 0) / 8 / 255;
-      const rawTreble = freqDataRef.current.slice(50, 100).reduce((s, v) => s + v, 0) / 50 / 255;
+    const freqData = new Uint8Array(analyserNode!.frequencyBinCount);
+    analyserNode!.getByteFrequencyData(freqData);
 
-      // Apply smoothing (lerp)
-      const smoothingFactor = 0.08;
-      smoothedBass += (rawBass - smoothedBass) * smoothingFactor;
-      smoothedTreble += (rawTreble - smoothedTreble) * smoothingFactor;
+    const smoothingFactor = 0.08;
+    const rawBass = freqData.slice(0, 8).reduce((s, v) => s + v, 0) / 8 / 255;
+    const rawTreble = freqData.slice(50, 100).reduce((s, v) => s + v, 0) / 50 / 255;
 
-      const bass = smoothedBass;
-      const treble = smoothedTreble;
+    smoothedBass += (rawBass - smoothedBass) * smoothingFactor;
+    smoothedTreble += (rawTreble - smoothedTreble) * smoothingFactor;
+    
+    const bass = smoothedBass;
+    const treble = smoothedTreble;
 
-      const reactiveRadius = 2 + Math.pow(bass, 1.5) * 4;
-      const reactiveSpeed = 8 - Math.pow(treble, 1.2) * 6;
-      const angle = (2 * Math.PI / Math.max(0.5, reactiveSpeed)) * time;
-      
-      const x = reactiveRadius * Math.sin(angle);
-      const y = (treble * 1.5 - 0.75) * 1.5; 
+    if (currentEffect === 'Reactive') {
+        // Use the stable Figure-8 path for movement
+        const x = radius * Math.sin((2 * Math.PI / duration) * time);
+        const z = radius * Math.cos((2 * Math.PI / duration) * time);
+        const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
+        path = { x, y, z };
+        
+        // Make gain and filter reactive
+        gain = Math.min(0.9, 0.4 + Math.pow(bass, 1.5) * 0.5); // Cap gain at 0.9 to prevent clipping
+        freq = 4000 + Math.pow(treble, 2) * 16000;
 
-      const lunge = -2.5 + Math.pow(bass, 2) * 3.5;
-      const z = Math.min(1.0, lunge); // Cap Z to prevent it getting too close
-
-      path = { x, y, z };
-      
-      const distance = Math.sqrt(x * x + y * y + z * z);
-      // Reduce gain as it gets closer to prevent clipping, but ensure it's still impactful
-      const proximityGain = 0.7 + Math.min(1, distance / reactiveRadius) * 0.3;
-      gain = Math.min(1.0, 0.6 + Math.pow(bass, 2) * 0.4) * proximityGain; // Capped max gain to 1.0
-      
-      freq = 6000 + treble * 14000;
-  } else {
+    } else {
       switch (currentEffect) {
         case '4D':
         case 'Wide Arc': {
@@ -591,34 +581,21 @@ export default function AudioProcessor({
         const graphPannerNode = pannerNode;
         const graphFilterNode = filterNode;
         const graphGainNode = gainNode;
-        const graphAnalyserNode = offlineCtx.createAnalyser();
-        graphAnalyserNode.fftSize = analyserNode?.fftSize || 256;
-        const graphFreqData = new Uint8Array(graphAnalyserNode.frequencyBinCount);
-        if(highShelfFilter) {
-            highShelfFilter.connect(graphAnalyserNode);
-        }
-
-
+        
+        // Offline rendering of automation
         if (graphPannerNode && graphFilterNode && graphGainNode) {
-            const timeStep = 1 / 120; // Render at 120fps for smooth curves
+             const timeStep = 1 / 120; // Render at 120fps for smooth curves
             for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
-                // To make reactive mode work offline, we need to analyze a snippet
-                if(effectType === 'Reactive') {
-                    // This is an approximation. A true offline reactive render is much more complex.
-                    // We'll analyze the whole buffer once for an average.
-                    const tempAnalyser = offlineCtx.createAnalyser();
-                    tempAnalyser.fftSize = analyserNode?.fftSize || 256;
-                    const tempSrc = offlineCtx.createBufferSource();
-                    tempSrc.buffer = decodedBuffer;
-                    tempSrc.connect(tempAnalyser);
-                    // We can't really do this properly without a full audio graph processing per time step.
-                    // For now, reactive download will be similar to 11D.
-                     const { x, y, z, gain, freq } = getAnimationPath(time); // Fallback to non-reactive for download
-                      graphPannerNode.positionX.setValueAtTime(x, time);
-                      graphPannerNode.positionY.setValueAtTime(y, time);
-                      graphPannerNode.positionZ.setValueAtTime(z, time);
-                      graphFilterNode.frequency.setValueAtTime(freq, time);
-                      graphGainNode.gain.setValueAtTime(gain, time);
+                if (effectType === 'Reactive') {
+                    // For offline reactive, we can't analyze in real-time.
+                    // This is a known limitation. We'll use a fallback or simplified logic.
+                    // For now, let's use the 11D path as a proxy during rendering.
+                    const { x, y, z, gain, freq } = getAnimationPath(time); // This will use the simplified logic
+                    graphPannerNode.positionX.setValueAtTime(x, time);
+                    graphPannerNode.positionY.setValueAtTime(y, time);
+                    graphPannerNode.positionZ.setValueAtTime(z, time);
+                    graphFilterNode.frequency.setValueAtTime(freq, time); // Still use reactive filter
+                    graphGainNode.gain.setValueAtTime(gain, time); // and reactive gain
                 } else {
                     const { x, y, z, gain, freq } = getAnimationPath(time);
                     graphPannerNode.positionX.setValueAtTime(x, time);
@@ -628,12 +605,12 @@ export default function AudioProcessor({
                     graphGainNode.gain.setValueAtTime(gain, time);
                 }
 
-                if(effectType === 'Custom') {
-                    if(wetNode?.gain) wetNode.gain.setValueAtTime(customReverb, time);
-                    if(dryNode?.gain) dryNode.gain.setValueAtTime(1 - customReverb, time);
-                    if(lowShelfFilter?.gain) lowShelfFilter.gain.setValueAtTime(customBass, time);
-                    if(midPeakingFilter?.gain) midPeakingFilter.gain.setValueAtTime(customMid, time);
-                    if(highShelfFilter?.gain) highShelfFilter.gain.setValueAtTime(customTreble, time);
+                if (effectType === 'Custom') {
+                    if (wetNode?.gain) wetNode.gain.setValueAtTime(customReverb, time);
+                    if (dryNode?.gain) dryNode.gain.setValueAtTime(1 - customReverb, time);
+                    if (lowShelfFilter?.gain) lowShelfFilter.gain.setValueAtTime(customBass, time);
+                    if (midPeakingFilter?.gain) midPeakingFilter.gain.setValueAtTime(customMid, time);
+                    if (highShelfFilter?.gain) highShelfFilter.gain.setValueAtTime(customTreble, time);
                 }
             }
         }
@@ -883,7 +860,6 @@ export default function AudioProcessor({
               </div>
               <div className='rounded-lg overflow-hidden border border-input aspect-video'>
                 <AudioVisualizer 
-                    ref={visualizerCanvasRef}
                     analyserNode={analyserNode} 
                     isPlaying={isPlaying}
                     visualizationType={visualizationType} 
@@ -920,3 +896,5 @@ export default function AudioProcessor({
     </Card>
   );
 }
+
+    

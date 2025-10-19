@@ -499,20 +499,19 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
   const animationFrameRef = useRef<number>();
   const timeRef = useRef(0);
 
-  const canvasRef = ref || internalCanvasRef;
+  const canvasRef = (ref as React.RefObject<HTMLCanvasElement>) || internalCanvasRef;
 
   useEffect(() => {
-    const canvas = (canvasRef as React.RefObject<HTMLCanvasElement>).current;
+    const canvas = canvasRef.current;
     if (!canvas || !analyserNode || !isPlaying) {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
-        const canvasCtx = canvas.getContext('2d');
-        if(canvasCtx) {
-           const dpr = window.devicePixelRatio || 1;
-           canvasCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-           canvasCtx.clearRect(0,0, canvas.width, canvas.height);
-        }
+        animationFrameRef.current = undefined;
       }
+       const canvasCtx = canvas?.getContext('2d');
+       if(canvasCtx) {
+           canvasCtx.clearRect(0,0, canvas.width, canvas.height);
+       }
       return;
     }
 
@@ -520,19 +519,24 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     if(!canvasCtx) return;
 
     // Different visualizers prefer different data
-    if (['orb', 'fabric', 'bloom'].includes(visualizationType)) {
+    if (['orb', 'fabric', 'bloom', 'chromatic'].includes(visualizationType)) {
         analyserNode.fftSize = 1024;
-    } else { // bars, tunnel, skyline, chromatic
+    } else { // bars, tunnel, skyline
         analyserNode.fftSize = 256;
     }
+
+    // Use a unified data array length based on frequency data for simplicity
     const bufferLength = analyserNode.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     
-    const dpr = window.devicePixelRatio || 1;
+    let dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    canvasCtx.scale(dpr, dpr);
+
+    if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvasCtx.scale(dpr, dpr);
+    }
     
     const width = canvas.width / dpr;
     const height = canvas.height / dpr;
@@ -548,24 +552,30 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
       
       switch(visualizationType) {
         case 'orb':
+          analyserNode.getByteTimeDomainData(dataArray);
           drawOrb(canvasCtx, analyserNode, dataArray, width, height);
           break;
         case 'bars':
+          analyserNode.getByteFrequencyData(dataArray);
           drawBars(canvasCtx, analyserNode, dataArray, width, height);
           break;
         case 'tunnel':
+          analyserNode.getByteFrequencyData(dataArray);
           drawTunnel(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
           break;
         case 'fabric':
-            drawFabric(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
+            drawFabric(canvasCtx, analyserNode, new Uint8Array(analyserNode.fftSize), width, height, timeRef.current);
             break;
         case 'skyline':
+            analyserNode.getByteFrequencyData(dataArray);
             drawSkyline(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
             break;
         case 'chromatic':
+            analyserNode.getByteTimeDomainData(dataArray);
             drawChromatic(canvasCtx, analyserNode, dataArray, width, height);
             break;
         case 'bloom':
+            analyserNode.getByteFrequencyData(dataArray);
             drawBloom(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
             break;
         default:
@@ -580,12 +590,15 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = undefined;
       }
     };
   }, [analyserNode, isPlaying, visualizationType, canvasRef]);
 
-  return <canvas ref={canvasRef} className="w-full h-full bg-background/50" />;
+  return <canvas ref={canvasRef as React.RefObject<HTMLCanvasElement>} className="w-full h-full bg-background/50" />;
 });
 
 AudioVisualizer.displayName = 'AudioVisualizer';
 export default AudioVisualizer;
+
+    
