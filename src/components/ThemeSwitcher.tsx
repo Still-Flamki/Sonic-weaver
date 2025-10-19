@@ -16,23 +16,17 @@ const themes = [
 ];
 
 export function ThemeSwitcher() {
-  const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { setTheme, resolvedTheme } = useTheme();
 
-  // When mounted on client, now we can show the UI
+  // useEffect only runs on the client, so now we can safely show the UI
   useEffect(() => {
     setMounted(true);
   }, []);
 
   if (!mounted) {
-    // Render placeholders on the server to avoid mismatch
-    return (
-        <div className="flex flex-wrap items-center justify-center gap-3">
-            {themes.map((t) => (
-                <div key={t.value} className="h-6 w-6 rounded-full bg-muted" />
-            ))}
-        </div>
-    );
+    // Render nothing on the server to avoid hydration mismatch
+    return null;
   }
 
   return (
