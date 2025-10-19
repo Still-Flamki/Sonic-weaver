@@ -5,6 +5,12 @@
       "description": "Abstract futuristic sound wave pattern in purple and cyan",
       "imageUrl": "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyMHx8YWJzdHJhY3QlMjBtdXNpYyUyMHNvdW5kd2F2ZXxlbnwwfHx8fDE3MjEwNzMyODR8MA&ixlib=rb-4.0.3&q=80&w=1080",
       "imageHint": "abstract soundwave"
+    },
+    {
+      "id": "demo-cover",
+      "description": "Abstract vinyl record with neon glowing lines",
+      "imageUrl": "https://images.unsplash.com/photo-1588253569852-3a5a2b2b1f8c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwzODkyfDB8MXxzZWFyY2h8Nnx8dmlueWwlMjByZWNvcmQlMjBuZW9ufGVufDB8fHx8MTY3ODg5NzI5OA&ixlib=rb-4.0.3&q=80&w=400",
+      "imageHint": "vinyl record neon"
     }
   ]
 }
