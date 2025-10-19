@@ -32,9 +32,10 @@ export default function Home() {
               <Image 
                 src={headphonesImage.imageUrl}
                 alt={headphonesImage.description}
-                fill
+                width={1200}
+                height={900}
                 data-ai-hint={headphonesImage.imageHint}
-                className="object-contain object-center opacity-10"
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none w-auto h-[150%] opacity-5"
               />
             )}
             <div className="relative z-10 max-w-4xl mx-auto">
