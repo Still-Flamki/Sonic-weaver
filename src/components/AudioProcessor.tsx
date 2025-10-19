@@ -138,9 +138,9 @@ export default function AudioProcessor({
       convolverNode.buffer = await createReverbImpulseResponse(audioContext);
       
       const dryNode = audioContext.createGain();
-      dryNode.gain.value = 0.7; // Main signal
+      dryNode.gain.value = 0.6; // Main signal (lowered)
       const wetNode = audioContext.createGain();
-      wetNode.gain.value = 0.3; // Reverb signal
+      wetNode.gain.value = 0.25; // Reverb signal (lowered)
 
       gainNode.connect(dryNode);
       gainNode.connect(wetNode);
