@@ -15,19 +15,8 @@ const themes = [
   { name: 'Silver', value: 'theme-silver', bg: 'linear-gradient(135deg, hsl(220, 15%, 75%), hsl(220, 10%, 25%))' },
 ];
 
-export function ThemeSwitcher() {
-  const [mounted, setMounted] = useState(false);
+function ThemeSwitcherContent() {
   const { setTheme, resolvedTheme } = useTheme();
-
-  // useEffect only runs on the client, so we can safely show the UI
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    // On the server or during hydration, render a placeholder to avoid layout shift
-    return <div className="h-6 w-full max-w-[200px] animate-pulse rounded-full bg-muted/50" />;
-  }
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -57,4 +46,22 @@ export function ThemeSwitcher() {
       </div>
     </TooltipProvider>
   );
+}
+
+
+export function ThemeSwitcher() {
+  const [mounted, setMounted] = useState(false);
+  const { resolvedTheme } = useTheme();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="h-6 w-full max-w-[200px] animate-pulse rounded-full bg-muted/50" />;
+  }
+
+  // By passing the theme as a key, we force React to re-mount the component
+  // when the theme changes, ensuring its internal state is always fresh.
+  return <ThemeSwitcherContent key={resolvedTheme} />;
 }
