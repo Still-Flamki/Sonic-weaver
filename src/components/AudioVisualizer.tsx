@@ -220,13 +220,13 @@ const drawFabric = (
     analyser.getByteFrequencyData(freqData);
     analyser.getByteTimeDomainData(dataArray);
 
-    ctx.fillStyle = 'rgba(10, 18, 28, 0.2)';
+    ctx.fillStyle = 'rgba(10, 18, 28, 0.35)'; // Dark background with more fade
     ctx.fillRect(0, 0, width, height);
 
     const bass = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
     const treble = freqData.slice(100, 200).reduce((s,v)=>s+v, 0) / 100 / 255;
 
-    // Particle Generation
+    // Particle Generation on bass hits
     if (particles.length < 500 && bass > 0.6 && bass > lastBass + 0.05) {
         for(let i=0; i<10; i++) {
             particles.push({
@@ -248,7 +248,7 @@ const drawFabric = (
     }));
     
     // Update and draw particles
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     particles.forEach(p => {
         // Noise field force
         const angle = noise(p.x / 300, p.y / 300, time / 5000) * Math.PI * 4;
@@ -281,14 +281,14 @@ const drawFabric = (
         if (p.y < 0) p.y = height;
         if (p.y > height) p.y = 0;
         
-        // Draw
-        const r = 50 + Math.floor(bass * 205);
-        const g = 100 + Math.floor(treble * 155);
-        const b = 200;
-        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${p.life * 0.5})`;
+        // Draw with new color scheme
+        const r = 150 + Math.floor(treble * 105); // Shift towards yellow/white on treble
+        const g = 50 + Math.floor(treble * 205);
+        const b = 150 - Math.floor(treble * 50); // Reduce blue on treble
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${p.life * 0.8})`;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x - p.vx * 2, p.y - p.vy * 2);
+        ctx.lineTo(p.x - p.vx * 3, p.y - p.vy * 3); // Longer trails
         ctx.stroke();
     });
 
