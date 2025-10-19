@@ -506,7 +506,7 @@ export default function AudioProcessor({
     document.body.appendChild(a);
     a.click();
     URL.revokeObjectURL(url);
-    a.remove();
+a.remove();
 
      toast({
         title: 'Download Ready!',
@@ -660,10 +660,10 @@ export default function AudioProcessor({
             });
             
             if (!ffmpeg.loaded) {
-                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+                const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
                 await ffmpeg.load({
-                  coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-                  wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                  coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+                  wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
                 });
             }
 
