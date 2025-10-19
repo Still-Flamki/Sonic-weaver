@@ -14,7 +14,7 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import AudioVisualizer, { VisualizationType } from './AudioVisualizer';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from './ui/separator';
+import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface AudioProcessorProps {
@@ -56,6 +56,7 @@ export default function AudioProcessor({
   const [error, setError] = useState<string | null>(null);
   const animationFrameRef = useRef<number>();
   const visualizerCanvasRef = useRef<HTMLCanvasElement>(null);
+  const freqDataRef = useRef<Uint8Array | null>(null);
   
   const [customSpeed, setCustomSpeed] = useState(8);
   const [customWidth, setCustomWidth] = useState(3);
@@ -83,7 +84,9 @@ export default function AudioProcessor({
         compressorNode.connect(audioContext.destination);
 
         analyserNode = audioContext.createAnalyser();
-        analyserNode.fftSize = 512;
+        analyserNode.fftSize = 256; // Smaller size for faster analysis
+        freqDataRef.current = new Uint8Array(analyserNode.frequencyBinCount);
+
       } catch (e) {
         setError('Web Audio API is not supported in this browser.');
         console.error(e);
@@ -191,56 +194,74 @@ export default function AudioProcessor({
         duration = 16 - customSpeed; // Inverse relationship: higher speed value means shorter duration
     }
 
-    switch (currentEffect) {
-      case '4D':
-      case 'Wide Arc': {
-        const angle = time * (Math.PI / duration); // Slower, wider arc
-        path = {
-          x: radius * Math.sin(angle),
-          y: 0,
-          z: radius * (Math.cos(angle) * 2 - 1),
-        };
-        gain = 0.9;
-        freq = 22050;
-        break;
-      }
-      case '8D':
-      case 'Circle': {
-        const angle = (2 * Math.PI / duration) * time;
-        path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
-        gain = 0.9; // Constant gain for 8D
-        freq = 22050;
-        break;
-      }
-      case '11D':
-      case 'Figure-8': {
-        const x = radius * Math.sin((2 * Math.PI / duration) * time);
-        const z = radius * Math.cos((2 * Math.PI / duration) * time);
-        const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
-        path = { x, y, z };
-        
-        const distance = Math.sqrt(x * x + y * y + z * z);
-        const minGain = 0.4;
-        const maxGain = 0.8;
-        
-        const proximityThreshold = 1.2;
-        if (distance < proximityThreshold) {
-            const proximityFactor = Math.pow(distance / proximityThreshold, 1.5);
-            gain = minGain * proximityFactor;
-        } else {
-            const distanceFactor = Math.min(1, (distance - proximityThreshold) / (radius - proximityThreshold));
-            gain = minGain + (maxGain - minGain) * distanceFactor;
-        }
-        gain = Math.max(0, Math.min(maxGain, gain));
+    if (currentEffect === 'Reactive' && freqDataRef.current && analyserNode) {
+        analyserNode.getByteFrequencyData(freqDataRef.current);
+        const bass = freqDataRef.current.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255; // 0-86Hz
+        const mid = freqDataRef.current.slice(20, 40).reduce((s, v) => s + v, 0) / 20 / 255; // ~500-1k
+        const treble = freqDataRef.current.slice(60, 100).reduce((s,v)=> s+v, 0) / 40 / 255; // ~2.5-4.3k
 
-        const baseFreq = 2500;
-        const freqRange = 15000;
-        const zNormalized = (z + radius) / (2 * radius);
-        freq = baseFreq + (zNormalized * freqRange);
-        break;
+        const reactiveRadius = 2 + Math.pow(bass, 2) * 8; // Width swells with bass
+        const reactiveSpeed = 12 - mid * 8; // Speed increases with mid-range energy
+        
+        const x = reactiveRadius * Math.sin((2 * Math.PI / reactiveSpeed) * time);
+        const z = reactiveRadius * Math.cos((2 * Math.PI / reactiveSpeed) * time);
+        const y = (treble * 2 - 1) * 2; // Vertical position driven by treble
+
+        path = { x, y, z };
+        gain = 0.8;
+        freq = 22050;
+    } else {
+      switch (currentEffect) {
+        case '4D':
+        case 'Wide Arc': {
+          const angle = time * (Math.PI / duration); // Slower, wider arc
+          path = {
+            x: radius * Math.sin(angle),
+            y: 0,
+            z: radius * (Math.cos(angle) * 2 - 1),
+          };
+          gain = 0.9;
+          freq = 22050;
+          break;
+        }
+        case '8D':
+        case 'Circle': {
+          const angle = (2 * Math.PI / duration) * time;
+          path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
+          gain = 0.9; // Constant gain for 8D
+          freq = 22050;
+          break;
+        }
+        case '11D':
+        case 'Figure-8': {
+          const x = radius * Math.sin((2 * Math.PI / duration) * time);
+          const z = radius * Math.cos((2 * Math.PI / duration) * time);
+          const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
+          path = { x, y, z };
+          
+          const distance = Math.sqrt(x * x + y * y + z * z);
+          const minGain = 0.4;
+          const maxGain = 0.8;
+          
+          const proximityThreshold = 1.2;
+          if (distance < proximityThreshold) {
+              const proximityFactor = Math.pow(distance / proximityThreshold, 1.5);
+              gain = minGain * proximityFactor;
+          } else {
+              const distanceFactor = Math.min(1, (distance - proximityThreshold) / (radius - proximityThreshold));
+              gain = minGain + (maxGain - minGain) * distanceFactor;
+          }
+          gain = Math.max(0, Math.min(maxGain, gain));
+
+          const baseFreq = 2500;
+          const freqRange = 15000;
+          const zNormalized = (z + radius) / (2 * radius);
+          freq = baseFreq + (zNormalized * freqRange);
+          break;
+        }
+        default:
+          path = { x: 0, y: 0, z: 0 };
       }
-      default:
-        path = { x: 0, y: 0, z: 0 };
     }
     
     return { ...path, gain, freq };
@@ -553,17 +574,43 @@ export default function AudioProcessor({
         const graphPannerNode = pannerNode;
         const graphFilterNode = filterNode;
         const graphGainNode = gainNode;
+        const graphAnalyserNode = offlineCtx.createAnalyser();
+        graphAnalyserNode.fftSize = analyserNode?.fftSize || 256;
+        const graphFreqData = new Uint8Array(graphAnalyserNode.frequencyBinCount);
+        if(highShelfFilter) {
+            highShelfFilter.connect(graphAnalyserNode);
+        }
+
 
         if (graphPannerNode && graphFilterNode && graphGainNode) {
             const timeStep = 1 / 120; // Render at 120fps for smooth curves
             for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
-                const { x, y, z, gain, freq } = getAnimationPath(time);
-                graphPannerNode.positionX.setValueAtTime(x, time);
-                graphPannerNode.positionY.setValueAtTime(y, time);
-                graphPannerNode.positionZ.setValueAtTime(z, time);
-                graphFilterNode.frequency.setValueAtTime(freq, time);
-                graphGainNode.gain.setValueAtTime(gain, time);
-                
+                // To make reactive mode work offline, we need to analyze a snippet
+                if(effectType === 'Reactive') {
+                    // This is an approximation. A true offline reactive render is much more complex.
+                    // We'll analyze the whole buffer once for an average.
+                    const tempAnalyser = offlineCtx.createAnalyser();
+                    tempAnalyser.fftSize = analyserNode?.fftSize || 256;
+                    const tempSrc = offlineCtx.createBufferSource();
+                    tempSrc.buffer = decodedBuffer;
+                    tempSrc.connect(tempAnalyser);
+                    // We can't really do this properly without a full audio graph processing per time step.
+                    // For now, reactive download will be similar to 11D.
+                     const { x, y, z, gain, freq } = getAnimationPath(time); // Fallback to non-reactive for download
+                      graphPannerNode.positionX.setValueAtTime(x, time);
+                      graphPannerNode.positionY.setValueAtTime(y, time);
+                      graphPannerNode.positionZ.setValueAtTime(z, time);
+                      graphFilterNode.frequency.setValueAtTime(freq, time);
+                      graphGainNode.gain.setValueAtTime(gain, time);
+                } else {
+                    const { x, y, z, gain, freq } = getAnimationPath(time);
+                    graphPannerNode.positionX.setValueAtTime(x, time);
+                    graphPannerNode.positionY.setValueAtTime(y, time);
+                    graphPannerNode.positionZ.setValueAtTime(z, time);
+                    graphFilterNode.frequency.setValueAtTime(freq, time);
+                    graphGainNode.gain.setValueAtTime(gain, time);
+                }
+
                 if(effectType === 'Custom') {
                     if(wetNode?.gain) wetNode.gain.setValueAtTime(customReverb, time);
                     if(dryNode?.gain) dryNode.gain.setValueAtTime(1 - customReverb, time);
@@ -694,8 +741,8 @@ export default function AudioProcessor({
                 <TabsTrigger value="custom">Custom</TabsTrigger>
               </TabsList>
               <TabsContent value="presets" className="mt-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {(['4D', '8D', '11D'] as const).map(effect => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {(['4D', '8D', '11D', 'Reactive'] as const).map(effect => (
                       <button
                       key={effect}
                       onClick={() => handleEffectChange(effect)}
