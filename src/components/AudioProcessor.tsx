@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle } from 'lucide-react';
 import type { EffectType } from './SonicWeaverApp';
 import { useToast } from '@/hooks/use-toast';
@@ -194,7 +193,7 @@ export default function AudioProcessor({
         path = {
           x: radius * Math.sin(angle),
           y: 0,
-          z: -radius * Math.cos(angle),
+          z: radius * (Math.sin(angle * 2) - 1),
         };
         gain = 1.0;
         freq = 22050;
@@ -217,8 +216,15 @@ export default function AudioProcessor({
         
         const distance = Math.sqrt(x * x + y * y + z * z);
         const minGain = 0.5; // The quietest the sound can get
-        const maxGain = 0.9; // The loudest it can get (prevents clipping when close)
-        gain = maxGain - (distance / radius) * (maxGain - minGain);
+        const maxGain = 0.9; // The loudest it can get
+        
+        // Compensate for proximity: reduce gain as sound gets closer than a certain threshold
+        const proximityThreshold = 1.0; // Start reducing gain when closer than this distance
+        if (distance < proximityThreshold) {
+            gain = minGain + (distance / proximityThreshold) * (maxGain - minGain);
+        } else {
+            gain = maxGain - ((distance - proximityThreshold) / (radius - proximityThreshold)) * (maxGain - minGain);
+        }
         gain = Math.max(minGain, Math.min(maxGain, gain));
 
         const baseFreq = 2500;
@@ -353,12 +359,7 @@ export default function AudioProcessor({
   const playPreview = async () => {
     if (!decodedBuffer || !audioContext) return;
     
-    if (isPlaying) {
-      // If we are already playing, we just need to ensure the graph is updated, not restart everything
-      await setupAudioGraph(audioContext);
-      return;
-    }
-
+    stopPreview();
     await audioContext.resume();
     
     // Create new source node each time play is clicked
@@ -639,33 +640,17 @@ export default function AudioProcessor({
 
         <div className="space-y-2">
           <Label>2. Select Effect Type</Label>
-          <RadioGroup
-            value={effectType}
-            onValueChange={handleEffectChange}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
-            disabled={isBusy}
-          >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {(['4D', '8D', '11D', 'Custom'] as const).map(effect => (
-                <Label
+                <VintageSwitch
                   key={effect}
-                  htmlFor={`effect-${effect}`}
-                  className={cn(
-                    "relative flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 transition-all hover:bg-accent/20 hover:border-accent hover:text-accent-foreground",
-                    effectType === effect && "border-primary shadow-md shadow-primary/20"
-                  )}
-                >
-                  <RadioGroupItem value={effect} id={`effect-${effect}`} className="sr-only" />
-                  <div className="flex flex-col items-center gap-2 text-center">
-                       <div className={cn(
-                          "h-2 w-2 rounded-full bg-red-500/50 transition-all",
-                          effectType === effect ? "bg-red-500 shadow-[0_0_4px_1px] shadow-red-500" : ""
-                      )}></div>
-                      <span className="text-lg font-semibold font-headline">{effect}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground mt-1">Audio</span>
-                </Label>
+                  label={effect}
+                  isActive={effectType === effect}
+                  onToggle={() => handleEffectChange(effect)}
+                  disabled={isBusy}
+                />
             ))}
-          </RadioGroup>
+          </div>
         </div>
 
         {effectType === 'Custom' && (
@@ -759,8 +744,7 @@ export default function AudioProcessor({
                     </div>
                 </div>
                  <div className="grid gap-2">
-                    <Label htmlFor="treble-slider">Treble</Label>
-                    <Slider
+                    <Label htmlFor="treble-slider">Treble</Label>                    <Slider
                         id="treble-slider"
                         min={-10} max={10} step={1}
                         value={[customTreble]}
@@ -808,5 +792,47 @@ export default function AudioProcessor({
         </Button>
       </CardFooter>
     </Card>
+  );
+}
+
+
+interface VintageSwitchProps {
+  label: string;
+  isActive: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}
+
+function VintageSwitch({ label, isActive, onToggle, disabled }: VintageSwitchProps) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isActive}
+      onClick={onToggle}
+      disabled={disabled}
+      className={cn(
+        "relative flex w-full flex-col items-center justify-between rounded-md border-2 p-4 font-headline transition-all",
+        "border-muted bg-popover text-muted-foreground shadow-inner",
+        isActive ? "border-primary/80 bg-primary/10 text-primary-foreground shadow-primary/20" : "hover:bg-accent/20 hover:border-accent",
+        disabled && "cursor-not-allowed opacity-50"
+      )}
+    >
+      <div className={cn(
+        "mb-2 h-2 w-2 rounded-full bg-red-500/30 transition-all",
+        isActive && "bg-red-500 shadow-[0_0_6px_2px] shadow-red-500/50"
+      )}></div>
+      
+      <span className="text-lg font-semibold">{label}</span>
+      <span className="text-xs text-muted-foreground/80">Effect</span>
+
+      {/* The mechanical switch part */}
+      <div className="mt-3 h-6 w-10 rounded-sm bg-neutral-800 p-1 shadow-inner">
+          <div className={cn(
+              "h-full w-1/2 bg-neutral-400 shadow-md transition-transform",
+              isActive ? "translate-x-full" : "translate-x-0"
+          )}></div>
+      </div>
+    </button>
   );
 }
