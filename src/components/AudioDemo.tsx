@@ -119,9 +119,11 @@ export default function AudioDemo() {
 
     const path = { x, y, z };
 
+    // More natural gain reduction based on distance
     const distance = Math.sqrt(x * x + y * y + z * z);
-    let gain = 1.0 - (distance / (radius * 1.5));
-    gain = Math.max(0.4, Math.min(1.0, gain * 1.2)); // Clamp and boost slightly
+    const maxDistance = radius * 1.2;
+    let gain = 1.0 - (distance / maxDistance);
+    gain = Math.max(0.4, Math.min(1.0, gain)); // Ensure it's audible but has dynamics
 
     const freq = 4000 + (z * 600); // More responsive filter
 
@@ -301,18 +303,7 @@ function DemoPlayerCard({
       </CardHeader>
       <CardContent className="flex flex-col items-center justify-center gap-4 pt-4 pb-8">
         <div className={`relative w-48 h-48 flex items-center justify-center rounded-lg overflow-hidden ${isEnhanced ? 'bg-primary/10' : 'bg-muted/50'}`}>
-          {coverImage ? (
-            <Image 
-              src={coverImage.imageUrl} 
-              alt={coverImage.description} 
-              width={192}
-              height={192}
-              className="object-cover w-full h-full"
-              data-ai-hint={coverImage.imageHint}
-            />
-          ) : (
-            <p className="text-muted-foreground text-sm font-mono">{isEnhanced ? '< 11D Processed >' : '< Mono Source >'}</p>
-          )}
+          <p className="text-muted-foreground text-sm font-mono">{isEnhanced ? '< 11D Processed >' : '< Mono Source >'}</p>
         </div>
         <Button onClick={onTogglePlay} size="lg" variant={isEnhanced ? 'default' : 'outline'} className="w-48">
           <Icon className="mr-2 h-5 w-5" />

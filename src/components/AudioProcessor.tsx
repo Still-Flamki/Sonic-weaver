@@ -141,12 +141,13 @@ export default function AudioProcessor({
 
     switch (effectType) {
       case '4D': {
-        // Smooth L-R sweep in front
+        // Smooth semi-circle sweep in front of the listener
         const duration = 4;
-        path = { 
-          x: radius * Math.sin(time * (2 * Math.PI / duration)), 
-          y: 0, 
-          z: -radius * Math.cos(time * (2 * Math.PI / duration)) 
+        const angle = (Math.PI / duration) * time; // Sweep 180 degrees
+        path = {
+          x: radius * Math.cos(angle - Math.PI / 2),
+          y: 0,
+          z: -radius * Math.sin(angle) * 0.8, // Keep it in front
         };
         break;
       }
@@ -167,8 +168,9 @@ export default function AudioProcessor({
         path = { x, y, z };
         
         const distance = Math.sqrt(x * x + y * y + z * z);
-        gain = 1.0 - (distance / (radius * 1.5));
-        gain = Math.max(0.4, Math.min(1.0, gain * 1.2)); // Clamp gain to prevent clipping but keep it audible
+        const maxDistance = radius * 1.2;
+        gain = 1.0 - (distance / maxDistance);
+        gain = Math.max(0.4, Math.min(1.0, gain)); // Clamp gain
 
         freq = 4000 + (z * 600); // Dynamic lowpass filter
         break;
