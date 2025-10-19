@@ -21,7 +21,8 @@ export default function AudioDemo() {
   const buffer = useRef<AudioBuffer | null>(null);
   const animationFrameRef = useRef<number>();
   const { toast } = useToast();
-  const demoImage = PlaceHolderImages.find(p => p.id === 'demo-cover');
+  const beforeImage = PlaceHolderImages.find(p => p.id === 'demo-cover-before');
+  const afterImage = PlaceHolderImages.find(p => p.id === 'demo-cover-after');
 
   useEffect(() => {
     if (!audioContext) {
@@ -127,7 +128,8 @@ export default function AudioDemo() {
 
     const distance = Math.sqrt(path.x*path.x + path.y*path.y + path.z*path.z);
     const gain = 1 - (distance / (radius * 2));
-    const freq = path.z > 0 ? 3000 + (path.z / zRadius) * 2000 : 5000 - (Math.abs(path.z) / zRadius) * 2000;
+    
+    const freq = z > 0 ? 3000 + (z / zRadius) * 2000 : 5000 - (Math.abs(z) / zRadius) * 2000;
 
     return { ...path, gain, freq };
   };
@@ -260,7 +262,7 @@ export default function AudioDemo() {
         description="Original Mono Audio"
         isPlaying={isPlaying && activePlayer === 'before'}
         onTogglePlay={() => togglePlay('before')}
-        coverImage={demoImage}
+        coverImage={beforeImage}
       />
       <DemoPlayerCard
         title="After"
@@ -268,7 +270,7 @@ export default function AudioDemo() {
         isPlaying={isPlaying && activePlayer === 'after'}
         onTogglePlay={() => togglePlay('after')}
         isEnhanced
-        coverImage={demoImage}
+        coverImage={afterImage}
       />
     </div>
   );

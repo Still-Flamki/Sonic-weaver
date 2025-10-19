@@ -7,10 +7,16 @@
       "imageHint": "abstract soundwave"
     },
     {
-      "id": "demo-cover",
-      "description": "Abstract vinyl record with neon glowing lines",
-      "imageUrl": "https://images.unsplash.com/photo-1588253569852-3a5a2b2b1f8c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwzODkyfDB8MXxzZWFyY2h8Nnx8dmlueWwlMjByZWNvcmQlMjBuZW9ufGVufDB8fHx8MTY3ODg5NzI5OA&ixlib=rb-4.0.3&q=80&w=400",
-      "imageHint": "vinyl record neon"
+      "id": "demo-cover-before",
+      "description": "A close-up, high-contrast black and white photo of the grooves on a vinyl record.",
+      "imageUrl": "https://images.unsplash.com/photo-1579782194340-3d0d8c370154?q=80&w=600&h=600&fit=crop&crop=entropy",
+      "imageHint": "vinyl record"
+    },
+    {
+      "id": "demo-cover-after",
+      "description": "A dark room with a person wearing headphones, surrounded by glowing purple and blue neon lines that represent sound waves.",
+      "imageUrl": "https://images.unsplash.com/photo-1519643381401-22c77e60520e?q=80&w=600&h=600&fit=crop&crop=entropy",
+      "imageHint": "headphones neon"
     }
   ]
 }
