@@ -64,7 +64,11 @@ async function toWav(
       });
 
       let bufs: any[] = [];
-      writer.on('error', reject);
+      writer.on('error', (err) => {
+        // If wav writer fails, just return the original data.
+        console.warn("Could not convert to WAV, returning raw data. Preview may not work.", err)
+        resolve(pcmData.toString('base64'));
+      });
       writer.on('data', function (d) {
         bufs.push(d);
       });
