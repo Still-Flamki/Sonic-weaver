@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, forwardRef } from 'react';
 
-export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'petal';
+export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'petal' | 'skyline';
 
 interface AudioVisualizerProps {
   analyserNode: AnalyserNode | null;
@@ -215,6 +215,67 @@ const drawPetal = (
     }
 };
 
+const drawSkyline = (
+  ctx: CanvasRenderingContext2D,
+  analyser: AnalyserNode,
+  dataArray: Uint8Array,
+  width: number,
+  height: number,
+  time: number
+) => {
+  analyser.getByteFrequencyData(dataArray);
+
+  // Background gradient
+  const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+  bgGradient.addColorStop(0, '#0a121c'); // Dark blue sky
+  bgGradient.addColorStop(0.7, '#141a32'); // Purple horizon
+  bgGradient.addColorStop(1, '#2c1a3c'); // Dark pink ground
+  ctx.fillStyle = bgGradient;
+  ctx.fillRect(0, 0, width, height);
+  
+  // Pulsing Moon
+  const volume = dataArray.reduce((sum, val) => sum + val, 0) / dataArray.length / 255;
+  const moonRadius = 20 + volume * 20;
+  const moonX = width * 0.75;
+  const moonY = height * 0.25;
+  const moonGradient = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, moonRadius);
+  moonGradient.addColorStop(0, 'rgba(255, 255, 240, 0.9)');
+  moonGradient.addColorStop(0.8, 'rgba(255, 255, 240, 0.2)');
+  moonGradient.addColorStop(1, 'rgba(255, 255, 240, 0)');
+  ctx.fillStyle = moonGradient;
+  ctx.fillRect(moonX - moonRadius, moonY - moonRadius, moonRadius * 2, moonRadius * 2);
+
+  const bufferLength = analyser.frequencyBinCount * 0.7; // Use 70% of frequency bins for buildings
+
+  for (let i = 0; i < bufferLength; i++) {
+    const barHeight = Math.pow(dataArray[i] / 255, 2) * height * 0.8;
+    if (barHeight < 2) continue;
+
+    const x = (i / bufferLength) * width;
+    const barWidth = (width / bufferLength) * (Math.random() * 0.5 + 0.75); // Varied width
+    const y = height - barHeight;
+
+    const intensity = dataArray[i] / 255;
+    const r = 10 + 200 * intensity;
+    const g = 10;
+    const b = 50 + 150 * (1 - intensity);
+
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.6)`;
+    ctx.fillRect(x, y, barWidth, barHeight);
+
+    // Windows
+    const highFreqIntensity = dataArray[Math.floor(bufferLength * 0.8 + i*0.2)] / 255;
+    if (highFreqIntensity > 0.5 && Math.random() > 0.8) {
+      const windowSize = Math.random() * 2 + 1;
+      const windowX = x + Math.random() * (barWidth - windowSize);
+      const windowY = y + Math.random() * (barHeight - windowSize);
+      ctx.fillStyle = `rgba(255, 220, 180, ${Math.random() * 0.5 + 0.5})`;
+      ctx.fillRect(windowX, windowY, windowSize, windowSize);
+    }
+  }
+};
+
+
 // Main component
 const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
   ({ analyserNode, isPlaying, visualizationType }, ref) => {
@@ -239,7 +300,7 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     // Different visualizers prefer different data
     if (visualizationType === 'orb' || visualizationType === 'petal') {
         analyserNode.fftSize = 512;
-    } else { // bars and tunnel
+    } else { // bars, tunnel, skyline
         analyserNode.fftSize = 256;
     }
     const bufferLength = analyserNode.frequencyBinCount;
@@ -275,6 +336,9 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
           break;
         case 'petal':
             drawPetal(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
+            break;
+        case 'skyline':
+            drawSkyline(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
             break;
         default:
           // Clear canvas if type is unknown
