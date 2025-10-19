@@ -4,9 +4,10 @@ import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, Ear } from 'lucide-react';
+import { ArrowRight, Ear, Gamepad2 } from 'lucide-react';
 import AudioDemo from '@/components/AudioDemo';
 import { Badge } from '@/components/ui/badge';
+import AudioGame from '@/components/AudioGame';
 
 export default function Home() {
   const heroImage = PlaceHolderImages.find(p => p.id === 'hero-background');
@@ -57,6 +58,22 @@ export default function Home() {
                 </p>
             </div>
             <AudioDemo />
+          </section>
+
+          <section id="game" className="container mx-auto px-4 md:px-6 py-12 md:py-20">
+             <div className="text-center mb-12">
+                <Badge variant="outline" className="text-lg py-2 px-4 border-accent/50">
+                    <Gamepad2 className="mr-2 h-5 w-5 text-accent" />
+                    Test Your Ears
+                </Badge>
+                <h3 className="text-3xl md:text-4xl font-bold font-headline tracking-tight text-foreground mt-4">
+                    The Spatial Sound Game
+                </h3>
+                <p className="mt-2 max-w-2xl mx-auto text-lg text-muted-foreground">
+                    Can you pinpoint the location of the sound? Put your headphones on, start a round, and click where you think the sound is coming from.
+                </p>
+            </div>
+            <AudioGame />
           </section>
 
           <section className="container mx-auto px-4 md:px-6 py-20">

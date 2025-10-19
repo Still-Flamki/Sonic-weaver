@@ -17,6 +17,12 @@
       "description": "A large, clean, and empty modern hall with concrete walls and polished floors, representing a spacious environment.",
       "imageUrl": "https://images.unsplash.com/photo-1593693397649-65d2a493d65b?q=80&w=600&h=600&fit=crop&crop=entropy",
       "imageHint": "spacious hall"
+    },
+    {
+      "id": "audio-game-bg",
+      "description": "A person wearing headphones, looking focused and listening intently, with a futuristic neon overlay.",
+      "imageUrl": "https://images.unsplash.com/photo-1583339597258-f9f6a4b276a6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxoZWFkcGhvbmVzJTIwZnV0dXJpc3RpY3xlbnwwfHx8fDE3MjEzOTI3OTd8MA&ixlib=rb-4.0.3&q=80&w=1080",
+      "imageHint": "headphones futuristic"
     }
   ]
 }
