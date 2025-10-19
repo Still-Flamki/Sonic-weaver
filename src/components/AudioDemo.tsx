@@ -96,9 +96,10 @@ export default function AudioDemo() {
     for (let i = 0; i < len; i++) {
         const t = i / rate;
         // Use a decaying noise, but modulate it slightly for a more natural tail
-        const envelope = Math.pow(1 - t / duration, decay);
-        left[i] = (Math.random() * 2 - 1) * envelope;
-        right[i] = (Math.random() * 2 - 1) * envelope;
+        const noise = Math.random() * 2 - 1;
+        const envelope = Math.pow(1 - t / duration, decay) * (1 - 0.5 * Math.sin(t * 10));
+        left[i] = noise * envelope;
+        right[i] = noise * envelope;
     }
     return impulse;
   };
@@ -118,17 +119,22 @@ export default function AudioDemo() {
     
     // Gain automation based on distance from center.
     const distance = Math.sqrt(x * x + y * y + z * z);
-    const minGain = 0.5; 
-    const maxGain = 0.9;
-    
-    // Compensate for proximity: reduce gain as sound gets closer than a certain threshold
-    const proximityThreshold = 1.0; // Start reducing gain when closer than this distance
+    const minGain = 0.4;
+    const maxGain = 0.8;
+
+    // Aggressive gain reduction for proximity to avoid loudness spikes
+    const proximityThreshold = 1.2;
     if (distance < proximityThreshold) {
-        gain = minGain + (distance / proximityThreshold) * (maxGain - minGain);
+        // Apply a curve to reduce gain more sharply as it gets closer
+        const proximityFactor = Math.pow(distance / proximityThreshold, 1.5);
+        gain = minGain * proximityFactor;
     } else {
-        gain = maxGain - ((distance - proximityThreshold) / (radius - proximityThreshold)) * (maxGain - minGain);
+        // Normalize distance outside the threshold to map to gain range
+        const distanceFactor = Math.min(1, (distance - proximityThreshold) / (radius - proximityThreshold));
+        gain = minGain + (maxGain - minGain) * distanceFactor;
     }
-    gain = Math.max(minGain, Math.min(maxGain, gain));
+    gain = Math.max(0, Math.min(maxGain, gain)); // Clamp gain to prevent silence or excessive volume
+
 
     // Filter automation based on Z position (front/back)
     // Sound is brighter in front, darker behind.
@@ -319,5 +325,7 @@ function DemoPlayerCard({
     </Card>
   );
 }
+
+    
 
     
