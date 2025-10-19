@@ -25,7 +25,7 @@ export function ThemeSwitcher() {
   }, []);
 
   if (!mounted) {
-    // On the server or during hydration, render a placeholder
+    // On the server or during hydration, render a placeholder to avoid layout shift
     return <div className="h-6 w-full max-w-[200px] animate-pulse rounded-full bg-muted/50" />;
   }
 
@@ -46,7 +46,7 @@ export function ThemeSwitcher() {
                 }}
                 aria-label={`Switch to ${t.name} theme`}
               >
-                 <div className={cn("h-full w-full rounded-full", (t.value === 'dark' || t.value === 'light') ? 'border-2 border-foreground/30' : '')}/>
+                 <div className={cn("h-full w-full rounded-full", (t.value === 'dark' || t.value === 'light') ? 'border border-foreground/30' : '')}/>
               </button>
             </TooltipTrigger>
             <TooltipContent>
