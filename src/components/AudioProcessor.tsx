@@ -140,7 +140,7 @@ export default function AudioProcessor({
       const dryNode = audioContext.createGain();
       dryNode.gain.value = 0.6; // Main signal (lowered)
       const wetNode = audioContext.createGain();
-      wetNode.gain.value = 0.25; // Reverb signal (lowered)
+      wetNode.gain.value = 0.4; // Reverb signal (lowered)
 
       gainNode.connect(dryNode);
       gainNode.connect(wetNode);
@@ -202,7 +202,7 @@ export default function AudioProcessor({
 
       const distance = Math.sqrt(x*x + y*y + z*z);
       const newGain = 1 - (distance / (radius * 2));
-      g.gain.linearRampToValueAtTime(Math.max(0.7, newGain), audioContext.currentTime + 0.05);
+      g.gain.linearRampToValueAtTime(newGain, audioContext.currentTime + 0.05);
 
 
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -265,7 +265,10 @@ export default function AudioProcessor({
     if (gainNode) gainNode.disconnect();
     if (filterNode) filterNode.disconnect();
     if (pannerNode) pannerNode.disconnect();
-    if (convolverNode) convolverNode.disconnect();
+    if (convolverNode) {
+      convolverNode.disconnect();
+      convolverNode = null;
+    }
     
     setIsPlaying(false);
   };
@@ -341,6 +344,7 @@ export default function AudioProcessor({
             onValueChange={(value: EffectType) => {
               setEffectType(value);
               if (isPlaying) {
+                // restart preview with new effect
                 playPreview();
               }
             }}
@@ -411,3 +415,5 @@ export default function AudioProcessor({
     </Card>
   );
 }
+
+    
