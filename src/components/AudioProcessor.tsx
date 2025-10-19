@@ -116,28 +116,53 @@ export default function AudioProcessor({
     }
   };
 
-  const start8DAnimation = () => {
+  const startSpatialAnimation = () => {
     if (!audioContext || !pannerNode) return;
 
-    const duration = 8; // seconds for one full circle
-    const currentTime = audioContext.currentTime;
+    let duration: number;
+    let path: (time: number) => { x: number; z: number };
+
+    switch (effectType) {
+      case '4D':
+        duration = 6; // Slower back and forth
+        path = (time) => {
+          const angle = (time / duration) * Math.PI; // Just one half of the circle
+          return { x: Math.cos(angle) * 3, z: 0 };
+        };
+        break;
+      case '8D':
+        duration = 8; // Full circle
+        path = (time) => {
+          const angle = (time / duration) * 2 * Math.PI;
+          return { x: Math.cos(angle) * 3, z: Math.sin(angle) * 3 };
+        };
+        break;
+      case '11D':
+        duration = 6; // Faster and more complex
+        path = (time) => {
+          // Figure-eight path
+          const angle = (time / duration) * 2 * Math.PI;
+          return { x: Math.sin(angle) * 3, z: Math.sin(angle) * Math.cos(angle) * 3 };
+        };
+        break;
+      default:
+        duration = 8;
+        path = (time) => ({ x: 0, z: 0 });
+    }
+
+    const startTime = audioContext.currentTime;
 
     const animate = () => {
       if (!pannerNode || !audioContext) return;
-      const time = audioContext.currentTime - currentTime;
-      const angle = (time / duration) * 2 * Math.PI;
-      const x = Math.cos(angle) * 3; // Panning radius
-      const z = Math.sin(angle) * 3;
+      const time = audioContext.currentTime - startTime;
+      const { x, z } = path(time);
       
-      // Check for setValueAtTime support, fallback for older browsers.
       if (pannerNode.positionX.setValueAtTime) {
         pannerNode.positionX.setValueAtTime(x, audioContext.currentTime);
         pannerNode.positionZ.setValueAtTime(z, audioContext.currentTime);
       } else {
-        // Fallback for older API versions
         (pannerNode as any).setPosition(x, 0, z);
       }
-
 
       animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -184,7 +209,7 @@ export default function AudioProcessor({
     
     sourceNode.start(0);
     setIsPlaying(true);
-    start8DAnimation();
+    startSpatialAnimation();
   };
 
   const stopPreview = () => {
@@ -282,7 +307,7 @@ export default function AudioProcessor({
                 htmlFor={`effect-${effect}`}
                 className="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
               >
-                <RadioGroupItem value={effect} id={`effect-${effect}`} className="sr-only" />
+                <RadioGroupItem value={effect as EffectType} id={`effect-${effect}`} className="sr-only" />
                 <span className="text-lg font-semibold">{effect}</span>
                 <span className="text-xs text-muted-foreground">Audio</span>
               </Label>
