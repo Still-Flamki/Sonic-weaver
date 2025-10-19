@@ -3,6 +3,7 @@
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useEffect, useState } from 'react';
 
 const themes = [
   { name: 'Default', value: 'dark', style: { background: 'linear-gradient(to right, hsl(224 71.4% 4.1%), hsl(217 91% 60%))' } },
@@ -16,6 +17,22 @@ const themes = [
 
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    // Render placeholders or nothing on the server to avoid mismatch
+    return (
+        <div className="flex flex-wrap items-center justify-center gap-3">
+            {themes.map((t) => (
+                <div key={t.value} className="h-6 w-6 rounded-full bg-muted" />
+            ))}
+        </div>
+    );
+  }
 
   return (
     <TooltipProvider>
