@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const themes = [
-  { name: 'Dark', value: 'dark', bg: 'hsl(var(--background))' },
-  { name: 'Light', value: 'light', bg: 'hsl(var(--background))' },
+  { name: 'Dark', value: 'dark', bg: 'hsl(224 71.4% 4.1%)' },
+  { name: 'Light', value: 'light', bg: 'hsl(0 0% 100%)' },
   { name: 'Fire & Gold', value: 'theme-fire-gold', bg: 'linear-gradient(135deg, hsl(35, 95%, 55%), hsl(5, 80%, 50%))' },
   { name: 'Ocean & Sky', value: 'theme-ocean-sky', bg: 'linear-gradient(135deg, hsl(195, 90%, 50%), hsl(220, 40%, 25%))' },
   { name: 'Earth & Sky', value: 'theme-earth-sky', bg: 'linear-gradient(135deg, hsl(95, 60%, 45%), hsl(30, 30%, 30%))' },
@@ -19,6 +19,7 @@ export function ThemeSwitcher() {
   const [mounted, setMounted] = useState(false);
   const { setTheme, resolvedTheme } = useTheme();
 
+  // useEffect only runs on the client, so we can safely show the UI
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -43,7 +44,7 @@ export function ThemeSwitcher() {
                   isActive ? 'scale-110 border-primary' : 'border-transparent'
                 )}
                 style={{
-                  background: t.value === 'dark' || t.value === 'light' ? (t.bg) : t.bg,
+                  background: t.bg
                 }}
                 aria-label={`Switch to ${t.name} theme`}
               >
