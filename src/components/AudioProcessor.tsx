@@ -41,6 +41,9 @@ let midPeakingFilter: BiquadFilterNode | null = null;
 let highShelfFilter: BiquadFilterNode | null = null;
 let analyserNode: AnalyserNode | null = null;
 
+// State for smoothed reactive values
+let smoothedBass = 0;
+let smoothedTreble = 0;
 
 export default function AudioProcessor({
   effectType,
@@ -196,26 +199,35 @@ export default function AudioProcessor({
 
     if (currentEffect === 'Reactive' && freqDataRef.current && analyserNode) {
       analyserNode.getByteFrequencyData(freqDataRef.current);
-      const bass = freqDataRef.current.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
-      const treble = freqDataRef.current.slice(60, 100).reduce((s, v) => s + v, 0) / 40 / 255;
+      const rawBass = freqDataRef.current.slice(0, 8).reduce((s, v) => s + v, 0) / 8 / 255;
+      const rawTreble = freqDataRef.current.slice(50, 100).reduce((s, v) => s + v, 0) / 50 / 255;
 
-      // Base circular path
-      const reactiveRadius = 2 + Math.pow(bass, 1.5) * 4; 
-      const reactiveSpeed = 10 - Math.pow(treble, 2) * 8; 
-      const angle = (2 * Math.PI / Math.max(0.5, reactiveSpeed)) * time; // Prevent division by zero or extreme speed
+      // Apply smoothing (lerp)
+      const smoothingFactor = 0.08;
+      smoothedBass += (rawBass - smoothedBass) * smoothingFactor;
+      smoothedTreble += (rawTreble - smoothedTreble) * smoothingFactor;
+
+      const bass = smoothedBass;
+      const treble = smoothedTreble;
+
+      const reactiveRadius = 2 + Math.pow(bass, 1.5) * 4;
+      const reactiveSpeed = 8 - Math.pow(treble, 1.2) * 6;
+      const angle = (2 * Math.PI / Math.max(0.5, reactiveSpeed)) * time;
+      
       const x = reactiveRadius * Math.sin(angle);
-      const y = (treble * 2 - 1) * 1.5; // Slightly reduced vertical movement
+      const y = (treble * 1.5 - 0.75) * 1.5; 
 
-      // "Coming at you" effect on the Z-axis
-      const lunge = -3 + Math.pow(bass, 3) * 5; // Starts at -3 (in front) and lunges towards the listener
-      const z = Math.min(2, lunge); // Cap z to prevent it going too far behind or getting too close (min was -0.5, now it's 2)
+      const lunge = -2.5 + Math.pow(bass, 2) * 3.5;
+      const z = Math.min(1.0, lunge); // Cap Z to prevent it getting too close
 
       path = { x, y, z };
       
-      // Gain is increased as it gets closer (lower z), but capped to prevent clipping
       const distance = Math.sqrt(x * x + y * y + z * z);
-      gain = Math.min(1.1, 0.5 + (1 / (distance + 1)) * 1.5); // Capped gain at 1.1
-      freq = 4000 + treble * 16000;
+      // Reduce gain as it gets closer to prevent clipping, but ensure it's still impactful
+      const proximityGain = 0.7 + Math.min(1, distance / reactiveRadius) * 0.3;
+      gain = Math.min(1.0, 0.6 + Math.pow(bass, 2) * 0.4) * proximityGain; // Capped max gain to 1.0
+      
+      freq = 6000 + treble * 14000;
   } else {
       switch (currentEffect) {
         case '4D':
@@ -908,5 +920,3 @@ export default function AudioProcessor({
     </Card>
   );
 }
-
-    
