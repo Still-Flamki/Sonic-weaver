@@ -67,7 +67,6 @@ export default function AudioProcessor({
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
   const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
   const [activeTab, setActiveTab] = useState('presets');
-  const [spatialPath, setSpatialPath] = useState({ x: 0, y: 0, z: 0 });
 
   const { toast } = useToast();
   
@@ -201,17 +200,16 @@ export default function AudioProcessor({
         const mid = freqDataRef.current.slice(20, 40).reduce((s, v) => s + v, 0) / 20 / 255;
         const treble = freqDataRef.current.slice(60, 100).reduce((s,v)=> s+v, 0) / 40 / 255;
 
-        // Enhanced reactivity
-        const reactiveRadius = 1.5 + Math.pow(bass, 1.5) * 12; // More sensitive to bass, wider range
-        const reactiveSpeed = 10 - Math.pow(mid, 2) * 9; // Speed more dramatically affected by mids
+        const reactiveRadius = 1.5 + Math.pow(bass, 1.5) * 12; 
+        const reactiveSpeed = 10 - Math.pow(mid, 2) * 9; 
         
         const x = reactiveRadius * Math.sin((2 * Math.PI / reactiveSpeed) * time);
         const z = reactiveRadius * Math.cos((2 * Math.PI / reactiveSpeed) * time);
-        const y = (treble * 2 - 1) * 3; // More vertical movement with treble
+        const y = (treble * 2 - 1) * 3;
 
         path = { x, y, z };
-        gain = 0.7 + bass * 0.2; // Pulsating gain effect
-        freq = 5000 + treble * 15000; // Filter opens up with high frequencies
+        gain = 0.7 + bass * 0.2; 
+        freq = 5000 + treble * 15000;
     } else {
       switch (currentEffect) {
         case '4D':
@@ -375,7 +373,6 @@ export default function AudioProcessor({
       p.positionZ.linearRampToValueAtTime(z, rampTime);
       f.frequency.linearRampToValueAtTime(freq, rampTime);
       g.gain.linearRampToValueAtTime(newGain, rampTime);
-      setSpatialPath({ x, y, z });
       
       animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -435,7 +432,6 @@ export default function AudioProcessor({
     midPeakingFilter?.disconnect();
     highShelfFilter?.disconnect();
     analyserNode?.disconnect();
-    setSpatialPath({ x: 0, y: 0, z: 0 });
     setIsPlaying(false);
   };
 
@@ -873,7 +869,6 @@ export default function AudioProcessor({
                     analyserNode={analyserNode} 
                     isPlaying={isPlaying}
                     visualizationType={visualizationType} 
-                    spatialPath={effectType === 'Reactive' ? spatialPath : {x:0, y:0, z:0}}
                 />
               </div>
             </div>
