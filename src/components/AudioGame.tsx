@@ -144,7 +144,7 @@ export default function AudioGame() {
               </div>
             </div>
 
-            {gameState === 'idle' && (
+            {gameState === 'idle' ? (
                 <div className="flex flex-col items-center justify-center h-full gap-4 my-8">
                     <p className="text-muted-foreground text-center max-w-xs">Press Start to begin the game. <br/> Headphones are required!</p>
                     <Button onClick={startRound} size="lg" variant="secondary" className="bg-accent text-accent-foreground hover:bg-accent/90">
@@ -152,9 +152,8 @@ export default function AudioGame() {
                         Start Game
                     </Button>
                 </div>
-            )}
-            
-            {(gameState === 'playing' || gameState === 'guessing' || gameState === 'feedback') && (
+            ) : (
+                <>
                 <div className="relative aspect-square max-w-[300px] w-full mx-auto my-6 flex-1 flex items-center justify-center">
                     <div className="absolute inset-0 flex items-center justify-center">
                         <div className="h-24 w-24 rounded-full bg-primary/20 flex items-center justify-center">
@@ -190,16 +189,15 @@ export default function AudioGame() {
                         );
                     })}
                 </div>
-            )}
 
-            <div className="w-full mt-auto">
-                { gameState !== 'idle' && 
+                <div className="w-full mt-auto">
                     <Button variant="ghost" onClick={() => playSoundAtLocation(currentLocation!)} disabled={!currentLocation || gameState !== 'guessing'}>
                         <Volume2 className="mr-2 h-4 w-4" />
                         Replay Sound
                     </Button>
-                }
-            </div>
+                </div>
+                </>
+            )}
         </div>
       </Card>
     </div>
