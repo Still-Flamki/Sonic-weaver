@@ -25,23 +25,21 @@ export function ThemeSwitcher() {
   }, []);
 
   if (!mounted) {
-    // Render a placeholder on the server to avoid hydration mismatch
+    // On the server or during hydration, render a placeholder
     return <div className="h-6 w-full max-w-[200px] animate-pulse rounded-full bg-muted/50" />;
   }
 
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex items-center gap-2">
-        {themes.map((t) => {
-           const isActive = resolvedTheme === t.value;
-          return (
+        {themes.map((t) => (
           <Tooltip key={t.value}>
             <TooltipTrigger asChild>
               <button
                 onClick={() => setTheme(t.value)}
                 className={cn(
                   'h-6 w-6 rounded-full border-2 transition-all hover:scale-110',
-                  isActive ? 'scale-110 border-primary' : 'border-transparent'
+                  resolvedTheme === t.value ? 'scale-110 border-primary' : 'border-transparent'
                 )}
                 style={{
                   background: t.bg
@@ -55,7 +53,7 @@ export function ThemeSwitcher() {
               <p>{t.name}</p>
             </TooltipContent>
           </Tooltip>
-        )})}
+        ))}
       </div>
     </TooltipProvider>
   );
