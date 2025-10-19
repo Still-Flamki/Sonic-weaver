@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import AudioVisualizer, { VisualizationType } from './AudioVisualizer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
+import { Separator } from './ui/separator';
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -64,7 +65,7 @@ export default function AudioProcessor({
   const [customMid, setCustomMid] = useState(0);
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
-  const [visualizationType, setVisualizationType] = useState<VisualizationType>('orb');
+  const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
 
 
   const { toast } = useToast();
@@ -687,17 +688,19 @@ export default function AudioProcessor({
   }
 
   return (
-    <Card className="w-full shadow-lg bg-card/50 backdrop-blur-sm border-primary/20 shadow-primary/10">
+    <Card className="w-full shadow-xl shadow-primary/5 border-primary/20 bg-card/80 backdrop-blur-xl">
       <CardHeader>
-        <CardTitle className="font-headline text-3xl tracking-tight">Audio Converter</CardTitle>
+        <CardTitle className="font-headline text-3xl tracking-tight">Audio Processor</CardTitle>
         <CardDescription>Upload a track, select an effect, and experience real spatial audio.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="audio-upload">1. Upload Audio File</Label>
+
+        {/* Step 1: Upload */}
+        <div className="space-y-3">
+          <Label className="text-lg font-headline">1. Upload Audio</Label>
           <div
             className={cn(
-                "relative flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-input bg-background/50 p-8 transition-colors hover:border-primary/50 hover:bg-primary/10",
+                "relative flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-input bg-background/50 p-8 transition-colors hover:border-primary/50 hover:bg-primary/5",
                 (isBusy || isRendering) && "cursor-not-allowed opacity-50"
             )}
             onClick={() => !(isBusy || isRendering) && document.getElementById('audio-upload')?.click()}
@@ -714,10 +717,7 @@ export default function AudioProcessor({
               <div className="flex flex-col items-center text-center">
                 <FileAudio className="mb-4 h-12 w-12 text-primary" />
                 <p className="font-semibold text-foreground">{audioFile.name}</p>
-
-                <p className="text-sm text-muted-foreground">
-                  ({(audioFile.size / 1024 / 1024).toFixed(2)} MB)
-                </p>
+                <p className="text-sm text-muted-foreground">({(audioFile.size / 1024 / 1024).toFixed(2)} MB)</p>
               </div>
             ) : (
               <div className="flex flex-col items-center text-center text-muted-foreground">
@@ -727,7 +727,7 @@ export default function AudioProcessor({
               </div>
             )}
             {(isBusy || isRendering) && (
-               <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+               <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
                   <RotateCw className="mb-4 h-12 w-12 animate-spin text-primary" />
                   <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : `${renderMessage}`}</p>
                    {isRendering && <Progress value={renderProgress} className="w-48 mt-4 h-2" />}
@@ -736,160 +736,159 @@ export default function AudioProcessor({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>2. Select Effect Type</Label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {(['4D', '8D', '11D', 'Custom'] as const).map(effect => (
-                <button
-                  key={effect}
-                  onClick={() => handleEffectChange(effect)}
-                  disabled={isBusy || isRendering}
-                  className={cn(
-                    "rounded-md border-2 p-4 font-headline text-lg font-semibold transition-all",
-                    "border-input bg-background/50 hover:border-primary/50 hover:bg-primary/10",
-                    effectType === effect ? "border-primary/80 bg-primary/20 text-primary-foreground shadow-lg shadow-primary/10" : "text-muted-foreground",
-                    (isBusy || isRendering) && "cursor-not-allowed opacity-50"
-                  )}
-                >
-                  {effect}
-                </button>
-            ))}
-          </div>
+        <Separator />
+
+        {/* Step 2: Effect Selection */}
+        <div className="space-y-3">
+            <Label className="text-lg font-headline">2. Select Effect</Label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {(['4D', '8D', '11D', 'Custom'] as const).map(effect => (
+                    <button
+                    key={effect}
+                    onClick={() => handleEffectChange(effect)}
+                    disabled={isBusy || isRendering}
+                    className={cn(
+                        "rounded-md border p-4 text-lg font-semibold transition-all duration-200",
+                        "border-input bg-background/50 hover:border-primary/50 hover:bg-primary/10",
+                        effectType === effect ? "border-primary bg-primary/20 text-primary-foreground shadow-lg shadow-primary/10 ring-2 ring-primary" : "text-muted-foreground",
+                        (isBusy || isRendering) && "cursor-not-allowed opacity-50"
+                    )}
+                    >
+                    {effect}
+                    </button>
+                ))}
+            </div>
         </div>
 
+        {/* Step 3: Custom Controls */}
         {effectType === 'Custom' && (
-          <Card className="bg-background/30 border-primary/20">
-            <CardHeader>
-                <CardTitle className="font-headline text-xl tracking-tight">Custom Controls</CardTitle>
-                <CardDescription>Fine-tune the audio effect parameters in real-time.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 pt-2">
-                 <div className="grid gap-2">
-                    <Label htmlFor="movement-path-select">Movement Path</Label>
-                     <Select value={customMovement} onValueChange={(val: MovementPath) => setCustomMovement(val)} disabled={isBusy || isRendering}>
-                        <SelectTrigger id="movement-path-select">
-                            <SelectValue placeholder="Select a path" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Figure-8">Figure-8</SelectItem>
-                            <SelectItem value="Circle">Circle</SelectItem>
-                            <SelectItem value="Wide Arc">Wide Arc</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="speed-slider">Speed</Label>
-                    <Slider
-                        id="speed-slider"
-                        min={1} max={15}
-                        value={[customSpeed]}
-                        onValueChange={(val) => setCustomSpeed(val[0])}
-                        disabled={isBusy || isRendering}
-                    />
-                     <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Slow</span>
-                        <span>Fast</span>
+          <>
+            <Separator />
+            <div className="space-y-3">
+              <Label className="text-lg font-headline">3. Customize Effect</Label>
+              <Card className="bg-background/50 border-border">
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 pt-6">
+                    <div className="grid gap-2">
+                        <Label htmlFor="movement-path-select">Movement Path</Label>
+                        <Select value={customMovement} onValueChange={(val: MovementPath) => setCustomMovement(val)} disabled={isBusy || isRendering}>
+                            <SelectTrigger id="movement-path-select">
+                                <SelectValue placeholder="Select a path" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Figure-8">Figure-8</SelectItem>
+                                <SelectItem value="Circle">Circle</SelectItem>
+                                <SelectItem value="Wide Arc">Wide Arc</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
-                </div>
-                 <div className="grid gap-2">
-                    <Label htmlFor="width-slider">Width</Label>
-                    <Slider
-                        id="width-slider"
-                        min={1} max={10}
-                        value={[customWidth]}
-                        onValueChange={(val) => setCustomWidth(val[0])}
-                        disabled={isBusy || isRendering}
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Narrow</span>
-                        <span>Wide</span>
+                    <div className="grid gap-2">
+                        <Label htmlFor="speed-slider">Speed ({customSpeed})</Label>
+                        <Slider
+                            id="speed-slider"
+                            min={1} max={15}
+                            value={[customSpeed]}
+                            onValueChange={(val) => setCustomSpeed(val[0])}
+                            disabled={isBusy || isRendering}
+                        />
                     </div>
-                </div>
-                 <div className="grid gap-2">
-                    <Label htmlFor="reverb-slider">Reverb</Label>
-                    <Slider
-                        id="reverb-slider"
-                        min={0} max={1} step={0.05}
-                        value={[customReverb]}
-                        onValueChange={(val) => setCustomReverb(val[0])}
-                        disabled={isBusy || isRendering}
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Dry</span>
-                        <span>Wet</span>
+                    <div className="grid gap-2">
+                        <Label htmlFor="width-slider">Width ({customWidth})</Label>
+                        <Slider
+                            id="width-slider"
+                            min={1} max={10}
+                            value={[customWidth]}
+                            onValueChange={(val) => setCustomWidth(val[0])}
+                            disabled={isBusy || isRendering}
+                        />
                     </div>
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="bass-slider">Bass</Label>
-                    <Slider
-                        id="bass-slider"
-                        min={-10} max={10} step={1}
-                        value={[customBass]}
-                        onValueChange={(val) => setCustomBass(val[0])}
-                        disabled={isBusy || isRendering}
-                    />
-                     <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>-10dB</span>
-                        <span>+10dB</span>
+                    <div className="grid gap-2">
+                        <Label htmlFor="reverb-slider">Reverb ({customReverb.toFixed(2)})</Label>
+                        <Slider
+                            id="reverb-slider"
+                            min={0} max={1} step={0.05}
+                            value={[customReverb]}
+                            onValueChange={(val) => setCustomReverb(val[0])}
+                            disabled={isBusy || isRendering}
+                        />
                     </div>
-                </div>
-                 <div className="grid gap-2">
-                    <Label htmlFor="mid-slider">Mids</Label>
-                    <Slider
-                        id="mid-slider"
-                        min={-10} max={10} step={1}
-                        value={[customMid]}
-                        onValueChange={(val) => setCustomMid(val[0])}
-                        disabled={isBusy || isRendering}
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>-10dB</span>
-                        <span>+10dB</span>
+                    <div className="grid gap-2 col-span-1 md:col-span-2">
+                        <Label className="mb-2">3-Band EQ</Label>
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="bass-slider" className="text-sm text-center">Bass ({customBass}dB)</Label>
+                                <Slider
+                                    id="bass-slider"
+                                    min={-10} max={10} step={1}
+                                    value={[customBass]}
+                                    onValueChange={(val) => setCustomBass(val[0])}
+                                    disabled={isBusy || isRendering}
+                                    orientation="vertical"
+                                    className="h-24 mx-auto"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="mid-slider" className="text-sm text-center">Mids ({customMid}dB)</Label>
+                                <Slider
+                                    id="mid-slider"
+                                    min={-10} max={10} step={1}
+                                    value={[customMid]}
+                                    onValueChange={(val) => setCustomMid(val[0])}
+                                    disabled={isBusy || isRendering}
+                                    orientation="vertical"
+                                    className="h-24 mx-auto"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="treble-slider" className="text-sm text-center">Treble ({customTreble}dB)</Label>
+                                <Slider
+                                    id="treble-slider"
+                                    min={-10} max={10} step={1}
+                                    value={[customTreble]}
+                                    onValueChange={(val) => setCustomTreble(val[0])}
+                                    disabled={isBusy || isRendering}
+                                    orientation="vertical"
+                                    className="h-24 mx-auto"
+                                />
+                            </div>
+                        </div>
                     </div>
-                </div>
-                 <div className="grid gap-2">
-                    <Label htmlFor="treble-slider">Treble</Label>                    <Slider
-                        id="treble-slider"
-                        min={-10} max={10} step={1}
-                        value={[customTreble]}
-                        onValueChange={(val) => setCustomTreble(val[0])}
-                        disabled={isBusy || isRendering}
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>-10dB</span>
-                        <span>+10dB</span>
-                    </div>
-                </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </div>
+          </>
         )}
         
         {decodedBuffer && (
-          <div className="pt-4 space-y-4">
-            <div className="grid gap-2">
-                <Label htmlFor="viz-select">3. Select Visualization</Label>
+          <>
+            <Separator />
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <Label className="text-lg font-headline">4. Preview & Visualize</Label>
                 <Select value={visualizationType} onValueChange={(val: VisualizationType) => setVisualizationType(val)} disabled={isBusy || isRendering}>
-                    <SelectTrigger id="viz-select" className="w-full md:w-[240px]">
+                    <SelectTrigger id="viz-select" className="w-full sm:w-[240px]">
                         <SelectValue placeholder="Select a visualization" />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="fabric">Aether Weaver</SelectItem>
                         <SelectItem value="bloom">Fractal Bloom</SelectItem>
-                        <SelectItem value="chromatic">Chromatic Aberration</SelectItem>
+                        <SelectItem value="chromatic">Chromatic Rift</SelectItem>
                         <SelectItem value="skyline">Neon Skyline</SelectItem>
                         <SelectItem value="tunnel">Warp Tunnel</SelectItem>
                         <SelectItem value="orb">Waveform Orb</SelectItem>
                         <SelectItem value="bars">Frequency Bars</SelectItem>
                     </SelectContent>
                 </Select>
+              </div>
+              <div className='rounded-lg overflow-hidden border border-input aspect-video'>
+                <AudioVisualizer 
+                    ref={visualizerCanvasRef}
+                    analyserNode={analyserNode} 
+                    isPlaying={isPlaying}
+                    visualizationType={visualizationType} 
+                />
+              </div>
             </div>
-            <AudioVisualizer 
-                ref={visualizerCanvasRef}
-                analyserNode={analyserNode} 
-                isPlaying={isPlaying}
-                visualizationType={visualizationType} 
-            />
-          </div>
+          </>
         )}
 
         {error && (
@@ -901,7 +900,7 @@ export default function AudioProcessor({
         )}
 
       </CardContent>
-      <CardFooter className="flex flex-col sm:flex-row gap-4">
+      <CardFooter className="flex flex-col sm:flex-row gap-4 bg-background/50 p-4 rounded-b-lg border-t">
         <Button onClick={togglePreview} disabled={!decodedBuffer || isBusy || isRendering} className="w-full sm:w-auto" variant="outline">
           {isPlaying ? <Pause className="mr-2 h-4 w-4 text-primary" /> : <Play className="mr-2 h-4 w-4 text-primary" />}
           {isPlaying ? 'Pause Preview' : 'Play Preview'}
@@ -910,25 +909,16 @@ export default function AudioProcessor({
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button disabled={!decodedBuffer || isBusy || isRendering} className="relative w-full sm:w-auto overflow-hidden">
-                    {isRendering && renderProgress > 0 && (
-                        <Progress value={renderProgress} className="absolute inset-0 w-full h-full" />
-                    )}
-                    <div className="relative flex items-center">
-                        {isRendering ? (
-                            <RotateCw className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Download className="mr-2 h-4 w-4" />
-                        )}
-                        {isRendering ? `${renderMessage} (${Math.round(renderProgress)}%)` : 'Download'}
-                    </div>
+                    <Download className="mr-2 h-4 w-4" />
+                    <span>Download</span>
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => handleDownload('audio')}>
+                <DropdownMenuItem onClick={() => handleDownload('audio')} disabled={isRendering}>
                     <Music className="mr-2 h-4 w-4" />
                     <span>Audio Only (.wav)</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDownload('video')}>
+                <DropdownMenuItem onClick={() => handleDownload('video')} disabled={isRendering}>
                     <Video className="mr-2 h-4 w-4" />
                     <span>Video with Visualizer (.webm)</span>
                 </DropdownMenuItem>

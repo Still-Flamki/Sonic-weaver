@@ -47,11 +47,11 @@ const drawOrb = (
   for (let j = 0; j < numLines; j++) {
     ctx.beginPath();
     const rotation = (j / numLines) * Math.PI * 2;
-    const r = 59 * (1 - intensity) + 16 * intensity;
-    const g = 130 * (1 - intensity) + 185 * intensity;
-    const b = 246 * (1 - intensity) + 129 * intensity;
-    const colorLerp = `rgba(${r}, ${g}, ${b}, 0.6)`;
-    const finalColor = intensity > 0.8 ? 'rgba(230, 240, 255, 1)' : colorLerp;
+    const r = 191 - intensity * 50; // Lavender -> Pinkish
+    const g = 191 - intensity * 50;
+    const b = 255 - intensity * 20;
+    const finalColor = `rgba(${r}, ${g}, ${b}, 0.7)`;
+
     ctx.strokeStyle = finalColor;
 
     let moved = false;
@@ -80,7 +80,7 @@ const drawBars = (
   height: number
 ) => {
   analyser.getByteFrequencyData(dataArray);
-  ctx.fillStyle = 'rgba(10, 18, 28, 1)';
+  ctx.fillStyle = 'rgba(15, 12, 22, 1)';
   ctx.fillRect(0, 0, width, height);
 
   const bufferLength = analyser.frequencyBinCount;
@@ -91,11 +91,14 @@ const drawBars = (
     const barHeight = (dataArray[i] / 255) * height;
     const intensity = dataArray[i] / 255;
     
-    const r = 59 * (1 - intensity) + 16 * intensity;
-    const g = 130 * (1 - intensity) + 185 * intensity;
-    const b = 246 * (1 - intensity) + 129 * intensity;
-    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    const r = 191 - intensity * 20;
+    const g = 191 - intensity * 100;
+    const b = 255;
+    const barGradient = ctx.createLinearGradient(x, height, x, height - barHeight);
+    barGradient.addColorStop(0, `rgb(${r * 0.8}, ${g*0.8}, ${b*0.8})`);
+    barGradient.addColorStop(1, `rgb(${r}, ${g}, ${b})`);
 
+    ctx.fillStyle = barGradient;
     ctx.fillRect(x, height - barHeight, barWidth, barHeight);
     
     x += barWidth;
@@ -111,7 +114,7 @@ const drawTunnel = (
     time: number
   ) => {
     analyser.getByteFrequencyData(dataArray);
-    ctx.fillStyle = 'rgba(10, 18, 28, 0.2)'; // Faded background for motion blur
+    ctx.fillStyle = 'rgba(15, 12, 22, 0.2)'; // Faded background for motion blur
     ctx.fillRect(0, 0, width, height);
   
     const centerX = width / 2;
@@ -136,9 +139,9 @@ const drawTunnel = (
       ctx.arc(centerX, centerY, radius * scale, 0, 2 * Math.PI);
   
       const intensity = Math.pow(v, 2);
-      const r = 59 * (1 - intensity) + 16 * intensity;
-      const g = 130 * (1 - intensity) + 185 * intensity;
-      const b = 246 * (1 - intensity) + 129 * intensity;
+      const r = 191 + intensity * 50;
+      const g = 191 - intensity * 100;
+      const b = 255;
   
       const alpha = scale * 0.8 * (0.5 + intensity * 0.5);
       
@@ -220,7 +223,7 @@ const drawFabric = (
     analyser.getByteFrequencyData(freqData);
     analyser.getByteTimeDomainData(dataArray);
 
-    ctx.fillStyle = 'rgba(10, 18, 28, 0.35)';
+    ctx.fillStyle = 'rgba(15, 12, 22, 0.35)';
     ctx.fillRect(0, 0, width, height);
 
     const bass = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
@@ -281,9 +284,9 @@ const drawFabric = (
         if (p.y < 0) p.y = height;
         if (p.y > height) p.y = 0;
         
-        const r = 150 + Math.floor(treble * 105);
-        const g = 50 + Math.floor(treble * 205);
-        const b = 150 - Math.floor(treble * 50);
+        const r = 221 - Math.floor(treble * 50); // Pink -> Lavender
+        const g = 160 + Math.floor(treble * 31);
+        const b = 221 + Math.floor(treble * 34);
         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${p.life * 0.8})`;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -307,9 +310,9 @@ const drawSkyline = (
 
   // Background gradient
   const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
-  bgGradient.addColorStop(0, '#0a121c'); // Dark blue sky
-  bgGradient.addColorStop(0.7, '#141a32'); // Purple horizon
-  bgGradient.addColorStop(1, '#2c1a3c'); // Dark pink ground
+  bgGradient.addColorStop(0, '#0f0c16'); // Dark blue sky
+  bgGradient.addColorStop(0.7, '#1b142d'); // Purple horizon
+  bgGradient.addColorStop(1, '#3b1c3c'); // Dark pink ground
   ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, width, height);
   
@@ -336,9 +339,9 @@ const drawSkyline = (
     const y = height - barHeight;
 
     const intensity = dataArray[i] / 255;
-    const r = 10 + 200 * intensity;
+    const r = 20 + 200 * intensity;
     const g = 10;
-    const b = 50 + 150 * (1 - intensity);
+    const b = 80 + 150 * (1 - intensity);
 
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.6)`;
     ctx.fillRect(x, y, barWidth, barHeight);
@@ -363,7 +366,7 @@ const drawChromatic = (
     height: number
   ) => {
     analyser.getByteTimeDomainData(dataArray);
-    ctx.fillStyle = 'rgba(10, 18, 28, 1)';
+    ctx.fillStyle = 'rgba(15, 12, 22, 1)';
     ctx.fillRect(0, 0, width, height);
   
     const bufferLength = dataArray.length;
@@ -379,9 +382,9 @@ const drawChromatic = (
   
     // --- Draw the 3 color channels ---
     const channels = [
-      { color: 'rgb(0, 255, 255)', offset: -aberrationAmount, yOffset: 0 }, // Cyan
-      { color: 'rgb(255, 0, 255)', offset: 0, yOffset: verticalJitter }, // Magenta
-      { color: 'rgb(255, 255, 0)', offset: aberrationAmount, yOffset: -verticalJitter }, // Yellow
+      { color: 'rgb(221, 160, 221)', offset: -aberrationAmount, yOffset: 0 }, // Pink
+      { color: 'rgb(191, 191, 255)', offset: 0, yOffset: verticalJitter }, // Lavender
+      { color: 'rgb(100, 100, 255)', offset: aberrationAmount, yOffset: -verticalJitter }, // Purple-blue
     ];
   
     ctx.lineWidth = 3;
@@ -421,7 +424,7 @@ const drawChromatic = (
     const freqData = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteFrequencyData(freqData);
 
-    ctx.fillStyle = 'rgba(10, 18, 28, 0.2)';
+    ctx.fillStyle = 'rgba(15, 12, 22, 0.2)';
     ctx.fillRect(0, 0, width, height);
 
     const centerX = width / 2;
@@ -442,9 +445,9 @@ const drawChromatic = (
         ctx.lineTo(0, -length);
         ctx.lineWidth = level * 1.5;
         
-        const r = 180 - level * 20 + treble * 50;
-        const g = 100 + level * 25;
-        const b = 220 - level * 10;
+        const r = 200 - level * 20 + treble * 50;
+        const g = 180 + level * 25;
+        const b = 240 - level * 10;
         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${opacity})`;
         ctx.stroke();
 
@@ -479,8 +482,8 @@ const drawChromatic = (
     // Central core
     const coreRadius = 5 + bass * 20;
     const coreGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, coreRadius);
-    coreGradient.addColorStop(0, `rgba(255, 220, 200, ${0.5 + treble * 0.5})`);
-    coreGradient.addColorStop(1, 'rgba(255, 150, 100, 0)');
+    coreGradient.addColorStop(0, `rgba(255, 240, 250, ${0.5 + treble * 0.5})`);
+    coreGradient.addColorStop(1, 'rgba(255, 200, 220, 0)');
     ctx.fillStyle = coreGradient;
     ctx.beginPath();
     ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
@@ -561,7 +564,7 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
             break;
         default:
           // Clear canvas if type is unknown
-          canvasCtx.fillStyle = 'rgba(10, 18, 28, 1)';
+          canvasCtx.fillStyle = 'rgba(15, 12, 22, 1)';
           canvasCtx.fillRect(0, 0, width, height);
       }
     };
@@ -575,7 +578,7 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     };
   }, [analyserNode, isPlaying, visualizationType, canvasRef]);
 
-  return <canvas ref={canvasRef} height="150" className="w-full rounded-lg bg-background/50" />;
+  return <canvas ref={canvasRef} className="w-full h-full bg-background/50" />;
 });
 
 AudioVisualizer.displayName = 'AudioVisualizer';
