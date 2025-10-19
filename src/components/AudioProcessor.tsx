@@ -24,6 +24,7 @@ let sourceNode: AudioBufferSourceNode | null = null;
 let pannerNode: PannerNode | null = null;
 let filterNode: BiquadFilterNode | null = null;
 let gainNode: GainNode | null = null;
+let convolverNode: ConvolverNode | null = null;
 
 export default function AudioProcessor({
   effectType,
@@ -107,7 +108,24 @@ export default function AudioProcessor({
     }
   };
 
-  const startSpatialAnimation = () => {
+  const createReverbImpulseResponse = async (context: AudioContext): Promise<AudioBuffer> => {
+    const rate = context.sampleRate;
+    const duration = 2; // seconds
+    const decay = 3;
+    const impulse = context.createBuffer(2, duration * rate, rate);
+    const left = impulse.getChannelData(0);
+    const right = impulse.getChannelData(1);
+
+    for (let i = 0; i < impulse.length; i++) {
+      const n = i / impulse.length;
+      left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+      right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+    }
+    return impulse;
+  };
+
+
+  const startSpatialAnimation = async () => {
     if (!audioContext || !pannerNode || !filterNode || !gainNode) return;
   
     const p = pannerNode;
@@ -115,26 +133,46 @@ export default function AudioProcessor({
     const g = gainNode;
     const radius = 3;
 
+    if (effectType === '11D') {
+      convolverNode = audioContext.createConvolver();
+      convolverNode.buffer = await createReverbImpulseResponse(audioContext);
+      
+      const dryNode = audioContext.createGain();
+      dryNode.gain.value = 0.7; // Main signal
+      const wetNode = audioContext.createGain();
+      wetNode.gain.value = 0.3; // Reverb signal
+
+      gainNode.connect(dryNode);
+      gainNode.connect(wetNode);
+      wetNode.connect(convolverNode);
+      dryNode.connect(pannerNode);
+      convolverNode.connect(pannerNode);
+    } else {
+        gainNode.connect(filterNode);
+        filterNode.connect(pannerNode);
+    }
+
+
     let duration: number;
     let path: (time: number) => { x: number; y: number; z: number };
 
     switch (effectType) {
       case '4D':
-        duration = 4; // Simple, slower side-to-side
+        duration = 4; // Clean right-to-left sweep
         path = (time) => {
           const angle = (time / duration) * Math.PI;
           return { x: Math.cos(angle) * radius, y: 0, z: -1 };
         };
         break;
       case '8D':
-        duration = 8; // Classic circular path
+        duration = 8; // Professional circular path
         path = (time) => {
           const angle = (time / duration) * 2 * Math.PI;
-          return { x: Math.cos(angle) * radius, y: 0, z: Math.sin(angle) * radius };
+          return { x: Math.sin(angle) * radius, y: 0, z: Math.cos(angle) * radius };
         };
         break;
       case '11D':
-        duration = 6; // Complex figure-eight with vertical movement
+        duration = 6; // Complex figure-eight for large room
         path = (time) => {
           const angle = (time / duration) * 2 * Math.PI;
           return { x: Math.sin(angle) * radius, y: Math.cos(angle * 2) * 1.5, z: Math.sin(angle) * Math.cos(angle) * radius };
@@ -159,11 +197,9 @@ export default function AudioProcessor({
       p.positionY.linearRampToValueAtTime(y, audioContext.currentTime + 0.05);
       p.positionZ.linearRampToValueAtTime(z, audioContext.currentTime + 0.05);
       
-      // Psychoacoustic effect: muffle high frequencies when sound is "behind" the listener
       const freq = 5000 + (z + radius) / (2 * radius) * 10000;
       f.frequency.linearRampToValueAtTime(freq, audioContext.currentTime + 0.05);
 
-      // Psychoacoustic effect: slightly reduce gain when sound is further away
       const distance = Math.sqrt(x*x + y*y + z*z);
       const newGain = 1 - (distance / (radius * 2));
       g.gain.linearRampToValueAtTime(Math.max(0.7, newGain), audioContext.currentTime + 0.05);
@@ -174,7 +210,7 @@ export default function AudioProcessor({
     animate();
   };
 
-  const playPreview = () => {
+  const playPreview = async () => {
     if (!processedBuffer || !audioContext) return;
     
     stopPreview();
@@ -203,10 +239,9 @@ export default function AudioProcessor({
        audioContext.listener.setPosition(0,0,0);
     }
     
-    sourceNode.connect(gainNode);
-    gainNode.connect(filterNode);
-    filterNode.connect(pannerNode);
     pannerNode.connect(audioContext.destination);
+    sourceNode.connect(gainNode);
+
     
     sourceNode.onended = () => {
       stopPreview();
@@ -214,7 +249,7 @@ export default function AudioProcessor({
     
     sourceNode.start(0);
     setIsPlaying(true);
-    startSpatialAnimation();
+    await startSpatialAnimation();
   };
 
   const stopPreview = () => {
@@ -230,6 +265,7 @@ export default function AudioProcessor({
     if (gainNode) gainNode.disconnect();
     if (filterNode) filterNode.disconnect();
     if (pannerNode) pannerNode.disconnect();
+    if (convolverNode) convolverNode.disconnect();
     
     setIsPlaying(false);
   };
@@ -304,7 +340,7 @@ export default function AudioProcessor({
             value={effectType}
             onValueChange={(value: EffectType) => {
               setEffectType(value);
-              if (isPlaying) { // Re-start animation if playing
+              if (isPlaying) {
                 playPreview();
               }
             }}
