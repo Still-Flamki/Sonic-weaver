@@ -153,9 +153,9 @@ export default function AudioDemo() {
     }
     
     const dryNode = audioContext.createGain();
-    dryNode.gain.value = 0.6; // Lowered to prevent clipping
+    dryNode.gain.value = 0.6;
     const wetNode = audioContext.createGain();
-    wetNode.gain.value = 0.2; // Lowered to prevent clipping
+    wetNode.gain.value = 0.4;
 
     gainNode.connect(dryNode);
     gainNode.connect(wetNode);
@@ -181,7 +181,7 @@ export default function AudioDemo() {
       p.positionY.linearRampToValueAtTime(y, audioContext.currentTime + 0.05);
       p.positionZ.linearRampToValueAtTime(z, audioContext.currentTime + 0.05);
       f.frequency.linearRampToValueAtTime(freq, audioContext.currentTime + 0.05);
-      g.gain.linearRampToValueAtTime(newGain, audioContext.currentTime + 0.05);
+      g.gain.linearRampToValueAtTime(Math.max(0.3, newGain), audioContext.currentTime + 0.05);
 
       animationFrameRef.current = requestAnimationFrame(animate);
     };
