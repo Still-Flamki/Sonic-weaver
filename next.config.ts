@@ -30,17 +30,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  webpack(config) {
-    config.module.rules.push({
-      test: /classes\.js$/,
-      loader: 'string-replace-loader',
-      options: {
-        search: 'new Worker(new URL(classWorkerURL, import.meta.url),',
-        replace: 'new Worker(new URL(classWorkerURL, self.location.href),',
-      },
-    });
-    return config;
-  },
 };
 
 export default nextConfig;
