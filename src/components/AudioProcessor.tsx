@@ -69,9 +69,20 @@ export default function AudioProcessor({
   const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
   const [activeTab, setActiveTab] = useState('presets');
 
+  const converterWorkerRef = useRef<Worker | null>(null);
 
   const { toast } = useToast();
   
+  useEffect(() => {
+    // Initialize the conversion worker
+    converterWorkerRef.current = new Worker(new URL('../workers/converter.worker.ts', import.meta.url));
+
+    // Cleanup worker on component unmount
+    return () => {
+      converterWorkerRef.current?.terminate();
+    };
+  }, []);
+
   useEffect(() => {
     if (!audioContext) {
       try {
@@ -494,7 +505,7 @@ export default function AudioProcessor({
     return new Blob([bufferArray], { type: 'audio/wav' });
   }
 
-  const downloadFile = (blob: Blob, fileType: 'audio' | 'video', extension: 'wav' | 'webm') => {
+  const downloadFile = (blob: Blob, fileType: 'audio' | 'video', extension: 'wav' | 'mp4') => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.style.display = 'none';
@@ -510,6 +521,39 @@ export default function AudioProcessor({
         description: `Your processed ${fileType} has been downloaded.`,
     });
   }
+
+  const convertWebMToMP4 = async (webmBlob: Blob): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+        if (!converterWorkerRef.current) {
+            return reject(new Error('Conversion worker not initialized.'));
+        }
+
+        const handleWorkerMessage = async (event: MessageEvent) => {
+            const { type, data, error, progress } = event.data;
+            if (type === 'conversion-complete') {
+                setRenderMessage('Download ready!');
+                setRenderProgress(1);
+                const mp4Blob = new Blob([data], { type: 'video/mp4' });
+                resolve(mp4Blob);
+                converterWorkerRef.current?.removeEventListener('message', handleWorkerMessage);
+            } else if (type === 'conversion-error') {
+                reject(new Error(error));
+                converterWorkerRef.current?.removeEventListener('message', handleWorkerMessage);
+            } else if (type === 'conversion-progress') {
+                setRenderProgress(progress);
+            }
+        };
+        
+        converterWorkerRef.current.addEventListener('message', handleWorkerMessage);
+
+        webmBlob.arrayBuffer().then(buffer => {
+            converterWorkerRef.current?.postMessage({
+                type: 'convert',
+                data: buffer,
+            }, [buffer]);
+        });
+    });
+};
 
   const renderVideo = async (renderedBuffer: AudioBuffer): Promise<Blob> => {
     return new Promise<Blob>((resolve, reject) => {
@@ -640,7 +684,7 @@ export default function AudioProcessor({
 
         let lastProgress = 0;
         const progressInterval = setInterval(() => {
-          const progress = (offlineCtx.currentTime / decodedBuffer.duration) * 100;
+          const progress = (offlineCtx.currentTime / decodedBuffer.duration) * 0.5; // Audio render is first 50%
           if (progress > lastProgress) {
              setRenderProgress(progress);
              lastProgress = progress;
@@ -649,12 +693,15 @@ export default function AudioProcessor({
 
         const renderedBuffer = await offlineCtx.startRendering();
         clearInterval(progressInterval);
-        setRenderProgress(100);
+        setRenderProgress(0.5);
 
         if (fileType === 'video') {
             setRenderMessage('Capturing video...');
-            const videoBlob = await renderVideo(renderedBuffer);
-            downloadFile(videoBlob, 'video', 'webm');
+            const videoWebmBlob = await renderVideo(renderedBuffer);
+            
+            setRenderMessage('Converting to MP4...');
+            const videoMp4Blob = await convertWebMToMP4(videoWebmBlob);
+            downloadFile(videoMp4Blob, 'video', 'mp4');
 
         } else {
             const wavBlob = bufferToWav(renderedBuffer);
@@ -746,7 +793,7 @@ export default function AudioProcessor({
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
                   <RotateCw className="mb-4 h-12 w-12 animate-spin text-primary" />
                   <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : `${renderMessage}`}</p>
-                   {isRendering && <Progress value={renderProgress} className="w-48 mt-4 h-2" />}
+                   {isRendering && <Progress value={renderProgress * 100} className="w-48 mt-4 h-2" />}
                </div>
             )}
           </div>
@@ -929,7 +976,7 @@ export default function AudioProcessor({
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleDownload('video')} disabled={isRendering}>
                     <Video className="mr-2 h-4 w-4" />
-                    <span>Video with Visualizer (.webm)</span>
+                    <span>Video with Visualizer (.mp4)</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
