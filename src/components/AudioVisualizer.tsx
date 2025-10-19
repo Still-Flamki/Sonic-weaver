@@ -84,14 +84,11 @@ const drawBars = (
   ctx.fillRect(0, 0, width, height);
 
   const bufferLength = analyser.frequencyBinCount;
-  const barWidth = (width / 2) / bufferLength;
-  let x = width / 2;
-
-  const primaryColor = 'rgba(59, 130, 246, 0.7)'; // Blue
-  const accentColor = 'rgba(16, 185, 129, 0.9)'; // Green
+  const barWidth = width / bufferLength;
+  let x = 0;
 
   for (let i = 0; i < bufferLength; i++) {
-    const barHeight = (dataArray[i] / 255) * height * 0.8;
+    const barHeight = (dataArray[i] / 255) * height;
     const intensity = dataArray[i] / 255;
     
     const r = 59 * (1 - intensity) + 16 * intensity;
@@ -99,10 +96,7 @@ const drawBars = (
     const b = 246 * (1 - intensity) + 129 * intensity;
     ctx.fillStyle = `rgb(${r},${g},${b})`;
 
-    // Draw right bar
     ctx.fillRect(x, height - barHeight, barWidth, barHeight);
-    // Draw left bar (mirrored)
-    ctx.fillRect(x - barWidth, height - barHeight, barWidth, barHeight);
     
     x += barWidth;
   }
