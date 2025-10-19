@@ -30,6 +30,21 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  experimental: {
+    // This allows requests from the Firebase Studio development environment.
+    allowedDevOrigins: ["*.cloudworkstations.dev"],
+  },
+  webpack: (config, { isServer }) => {
+    // This is required to make ffmpeg.wasm work.
+    config.resolve.fallback = { fs: false, path: false, crypto: false };
+    
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: 'asset/resource',
+    });
+
+    return config;
+  },
 };
 
 export default nextConfig;
