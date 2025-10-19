@@ -197,19 +197,25 @@ export default function AudioProcessor({
     if (currentEffect === 'Reactive' && freqDataRef.current && analyserNode) {
         analyserNode.getByteFrequencyData(freqDataRef.current);
         const bass = freqDataRef.current.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
-        const mid = freqDataRef.current.slice(20, 40).reduce((s, v) => s + v, 0) / 20 / 255;
-        const treble = freqDataRef.current.slice(60, 100).reduce((s,v)=> s+v, 0) / 40 / 255;
+        const treble = freqDataRef.current.slice(60, 100).reduce((s, v) => s + v, 0) / 40 / 255;
 
-        const reactiveRadius = 1.5 + Math.pow(bass, 1.5) * 12; 
-        const reactiveSpeed = 10 - Math.pow(mid, 2) * 9; 
-        
-        const x = reactiveRadius * Math.sin((2 * Math.PI / reactiveSpeed) * time);
-        const z = reactiveRadius * Math.cos((2 * Math.PI / reactiveSpeed) * time);
-        const y = (treble * 2 - 1) * 3;
+        // Base circular path
+        const reactiveRadius = 2 + Math.pow(bass, 1.5) * 5; 
+        const reactiveSpeed = 10 - Math.pow(treble, 2) * 8; 
+        const angle = (2 * Math.PI / reactiveSpeed) * time;
+        const x = reactiveRadius * Math.sin(angle);
+        const y = (treble * 2 - 1) * 2; 
+
+        // "Coming at you" effect on the Z-axis
+        const lunge = -3 + Math.pow(bass, 3) * 5.5; // Starts at -3 (in front) and lunges towards the listener (up to +2.5)
+        const z = Math.min(2.5, lunge); // Cap z to prevent it going too far behind
 
         path = { x, y, z };
-        gain = 0.7 + bass * 0.2; 
-        freq = 5000 + treble * 15000;
+        
+        // Gain is increased as it gets closer (lower z), but capped to prevent clipping
+        const distance = Math.sqrt(x * x + y * y + z * z);
+        gain = Math.min(1.2, 0.5 + (1 / (distance + 1)) * 1.5);
+        freq = 4000 + treble * 16000;
     } else {
       switch (currentEffect) {
         case '4D':
@@ -902,3 +908,5 @@ export default function AudioProcessor({
     </Card>
   );
 }
+
+    
