@@ -43,6 +43,14 @@ const nextConfig: NextConfig = {
       type: 'asset/resource',
     });
 
+    // This is the key change to prevent Webpack from trying to parse the ffmpeg library.
+    config.module.rules.push({
+      test: /@ffmpeg\/ffmpeg/,
+      parser: {
+        amd: false,
+      },
+    });
+
     return config;
   },
 };
