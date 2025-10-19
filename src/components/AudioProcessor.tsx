@@ -10,7 +10,7 @@ import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle } from
 import type { EffectType } from './SonicWeaverApp';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { Terminal } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -176,7 +176,7 @@ export default function AudioProcessor({
     
     const distance = Math.sqrt(path.x*path.x + path.y*path.y + path.z*path.z);
     const gain = 1 - (distance / (radius * 2));
-    const freq = path.z > 0 ? 3000 + (path.z / zRadius) * 2000 : 5000 + (path.z + zRadius) / (2 * zRadius) * 10000;
+    const freq = path.z > 0 ? 3000 + (path.z / zRadius) * 2000 : 5000 - (Math.abs(path.z) / zRadius) * 2000;
 
     return { ...path, gain, freq };
   };
@@ -201,9 +201,9 @@ export default function AudioProcessor({
       }
       
       const dryNode = audioContext.createGain();
-      dryNode.gain.value = 0.8; 
+      dryNode.gain.value = 0.7; 
       const wetNode = audioContext.createGain();
-      wetNode.gain.value = 0.2; 
+      wetNode.gain.value = 0.3; 
 
       gainNode.connect(dryNode);
       gainNode.connect(wetNode);
@@ -434,9 +434,9 @@ export default function AudioProcessor({
             offlineConvolver = offlineCtx.createConvolver();
             offlineConvolver.buffer = await createReverbImpulseResponse(offlineCtx);
             const dryNode = offlineCtx.createGain();
-            dryNode.gain.value = 0.8;
+            dryNode.gain.value = 0.7;
             const wetNode = offlineCtx.createGain();
-            wetNode.gain.value = 0.2;
+            wetNode.gain.value = 0.3;
             offlineGain.connect(dryNode);
             offlineGain.connect(wetNode);
             wetNode.connect(offlineConvolver);
@@ -497,16 +497,19 @@ export default function AudioProcessor({
   const isBusy = isDecoding || isRendering;
 
   return (
-    <Card className="w-full shadow-lg border-border/50">
+    <Card className="w-full shadow-lg bg-card/50 backdrop-blur-sm border-primary/20 shadow-primary/10">
       <CardHeader>
-        <CardTitle className="font-headline text-2xl">Audio Converter</CardTitle>
+        <CardTitle className="font-headline text-3xl tracking-tight">Audio Converter</CardTitle>
         <CardDescription>Upload a track, select an effect, and experience real spatial audio.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="audio-upload">1. Upload Audio File</Label>
           <div
-            className="relative flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-input bg-background/50 p-8 transition-colors hover:bg-accent/20"
+            className={cn(
+                "relative flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-input bg-background/50 p-8 transition-colors hover:border-primary/50 hover:bg-accent/10",
+                isBusy && "cursor-not-allowed opacity-50"
+            )}
             onClick={() => !isBusy && document.getElementById('audio-upload')?.click()}
           >
             <Input
@@ -533,8 +536,8 @@ export default function AudioProcessor({
               </div>
             )}
             {isBusy && (
-               <div className="flex flex-col items-center text-center">
-                  <RotateCw className="mb-4 h-12 w-12 animate-spin" />
+               <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+                  <RotateCw className="mb-4 h-12 w-12 animate-spin text-primary" />
                   <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : "Rendering..."}</p>
               </div>
             )}
@@ -561,10 +564,10 @@ export default function AudioProcessor({
               <Label
                 key={effect}
                 htmlFor={`effect-${effect}`}
-                className="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                className="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 transition-all hover:bg-accent/20 hover:border-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:shadow-primary/20 peer-data-[state=checked]:shadow-md [&:has([data-state=checked])]:border-primary"
               >
                 <RadioGroupItem value={effect as EffectType} id={`effect-${effect}`} className="sr-only" />
-                <span className="text-lg font-semibold">{effect}</span>
+                <span className="text-lg font-semibold font-headline">{effect}</span>
                 <span className="text-xs text-muted-foreground">Audio</span>
               </Label>
             ))}
@@ -581,8 +584,8 @@ export default function AudioProcessor({
 
       </CardContent>
       <CardFooter className="flex flex-col sm:flex-row gap-2">
-        <Button onClick={togglePreview} disabled={!decodedBuffer || isBusy} className="w-full sm:w-auto" variant="secondary">
-          {isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+        <Button onClick={togglePreview} disabled={!decodedBuffer || isBusy} className="w-full sm:w-auto" variant="outline">
+          {isPlaying ? <Pause className="mr-2 h-4 w-4 text-primary" /> : <Play className="mr-2 h-4 w-4 text-primary" />}
           {isPlaying ? 'Pause Preview' : 'Play Preview'}
         </Button>
         <Button onClick={handleDownload} disabled={!decodedBuffer || isBusy} className="w-full sm:w-auto">
@@ -598,12 +601,10 @@ export default function AudioProcessor({
             </>
           )}
         </Button>
-        <Button onClick={() => handleReset()} variant="outline" className="w-full sm:w-auto sm:ml-auto" disabled={isBusy}>
+        <Button onClick={() => handleReset()} variant="ghost" className="w-full sm:w-auto sm:ml-auto" disabled={isBusy}>
             Reset
         </Button>
       </CardFooter>
     </Card>
   );
 }
-
-    

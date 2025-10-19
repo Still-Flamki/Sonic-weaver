@@ -14,7 +14,7 @@ export default function Home() {
           src={heroImage.imageUrl}
           alt={heroImage.description}
           fill
-          className="object-cover opacity-5 dark:opacity-[0.03]"
+          className="object-cover opacity-[0.03]"
           priority
           data-ai-hint={heroImage.imageHint}
         />
