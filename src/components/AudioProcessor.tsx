@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -19,6 +20,8 @@ interface AudioProcessorProps {
   audioFile: File | null;
   setAudioFile: Dispatch<SetStateAction<File | null>>;
 }
+
+type MovementPath = 'Circle' | 'Wide Arc' | 'Figure-8';
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -54,6 +57,7 @@ export default function AudioProcessor({
   const [customBass, setCustomBass] = useState(0);
   const [customMid, setCustomMid] = useState(0);
   const [customTreble, setCustomTreble] = useState(0);
+  const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
 
 
   const { toast } = useToast();
@@ -166,35 +170,38 @@ export default function AudioProcessor({
     let freq = 22050; // Default: no filter
     let gain = 1.0;
     
-    let currentEffect = effectType;
+    let currentEffect: EffectType | MovementPath = effectType;
     if (effectType === 'Custom') {
+        currentEffect = customMovement;
         radius = customWidth;
         duration = 16 - customSpeed; // Inverse relationship: higher speed value means shorter duration
     }
 
 
     switch (currentEffect) {
-      case '4D': {
+      case '4D':
+      case 'Wide Arc': {
         path = {
-          x: radius * Math.sin(time * (Math.PI / 6)),
+          x: radius * Math.sin(time * (Math.PI / (duration / 2))),
           y: 0,
-          z: -radius * Math.cos(time * (Math.PI / 6)),
+          z: -radius * Math.cos(time * (Math.PI / (duration / 2))),
         };
         gain = 1.0;
         freq = 22050;
         break;
       }
-      case '8D': {
-        const angle = (2 * Math.PI / 8) * time;
+      case '8D':
+      case 'Circle': {
+        const angle = (2 * Math.PI / duration) * time;
         path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
         gain = 1.0;
         freq = 22050;
         break;
       }
       case '11D':
-      case 'Custom': { // Custom uses 11D path with different parameters
+      case 'Figure-8': {
         const x = radius * Math.sin((2 * Math.PI / duration) * time);
-        const z = radius * Math.cos((2 * Math.PI / duration) * time); // This now goes from -radius to +radius
+        const z = radius * Math.cos((2 * Math.PI / duration) * time); 
         const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
         path = { x, y, z };
         
@@ -632,7 +639,7 @@ export default function AudioProcessor({
                 >
                   <RadioGroupItem value={effect} id={`effect-${effect}`} className="sr-only" />
                   <div className="flex flex-col items-center gap-2 text-center">
-                      <div className={cn(
+                       <div className={cn(
                           "h-2 w-2 rounded-full bg-red-500/50 transition-all",
                           effectType === effect ? "bg-red-500 shadow-[0_0_4px_1px] shadow-red-500" : ""
                       )}></div>
@@ -650,7 +657,20 @@ export default function AudioProcessor({
                 <CardTitle className="font-headline text-xl tracking-tight">Custom Controls</CardTitle>
                 <CardDescription>Fine-tune the audio effect parameters in real-time.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6 pt-2">
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 pt-2">
+                 <div className="grid gap-2">
+                    <Label htmlFor="movement-path-select">Movement Path</Label>
+                     <Select value={customMovement} onValueChange={(val: MovementPath) => setCustomMovement(val)} disabled={isBusy}>
+                        <SelectTrigger id="movement-path-select">
+                            <SelectValue placeholder="Select a path" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Figure-8">Figure-8</SelectItem>
+                            <SelectItem value="Circle">Circle</SelectItem>
+                            <SelectItem value="Wide Arc">Wide Arc</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
                 <div className="grid gap-2">
                     <Label htmlFor="speed-slider">Speed</Label>
                     <Slider
