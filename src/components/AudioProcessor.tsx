@@ -338,7 +338,7 @@ export default function AudioProcessor({
 
         if (filterNode && pannerNode) {
           dryNode.connect(filterNode);
-          wetNode.connect(convolverNode);
+          if (convolverNode) wetNode.connect(convolverNode);
           filterNode.connect(pannerNode);
           if (convolverNode) convolverNode.connect(pannerNode);
         }
@@ -655,6 +655,14 @@ export default function AudioProcessor({
                 graphPannerNode.positionZ.setValueAtTime(z, time);
                 graphFilterNode.frequency.setValueAtTime(freq, time);
                 graphGainNode.gain.setValueAtTime(gain, time);
+                
+                if(effectType === 'Custom') {
+                    if(wetNode?.gain) wetNode.gain.setValueAtTime(customReverb, time);
+                    if(dryNode?.gain) dryNode.gain.setValueAtTime(1 - customReverb, time);
+                    if(lowShelfFilter?.gain) lowShelfFilter.gain.setValueAtTime(customBass, time);
+                    if(midPeakingFilter?.gain) midPeakingFilter.gain.setValueAtTime(customMid, time);
+                    if(highShelfFilter?.gain) highShelfFilter.gain.setValueAtTime(customTreble, time);
+                }
             }
         }
         

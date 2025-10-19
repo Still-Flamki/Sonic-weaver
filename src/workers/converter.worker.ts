@@ -1,4 +1,5 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
 
 let ffmpeg: FFmpeg | null = null;
 
@@ -19,8 +20,8 @@ const loadFFmpeg = async () => {
     // These URLs are stable and recommended for wasm version
     const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
     await ffmpeg.load({
-        coreURL: `${baseURL}/ffmpeg-core.js`,
-        wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+        coreURL: await fetchFile(`${baseURL}/ffmpeg-core.js`),
+        wasmURL: await fetchFile(`${baseURL}/ffmpeg-core.wasm`),
     });
     return ffmpeg;
 };
