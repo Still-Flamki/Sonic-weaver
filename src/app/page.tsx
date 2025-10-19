@@ -11,6 +11,7 @@ import AudioGame from '@/components/AudioGame';
 
 export default function Home() {
   const heroImage = PlaceHolderImages.find(p => p.id === 'hero-background');
+  const headphonesImage = PlaceHolderImages.find(p => p.id === 'large-headphones');
   
   return (
     <div className="relative flex min-h-screen flex-col bg-background">
@@ -38,11 +39,22 @@ export default function Home() {
                 <p className="mt-4 max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground">
                 Our tools transform your flat audio into an immersive spatial experience. Hear the difference for yourself.
                 </p>
-                <div className="mt-10 flex flex-col items-center gap-4">
-                    <Headphones className="h-16 w-16 text-primary/70" />
-                    <p className="font-semibold text-primary/90">
-                        Plug in your headphones for the best experience
-                    </p>
+                <div className="mt-10 relative flex flex-col items-center justify-center gap-4">
+                  {headphonesImage && (
+                    <Image 
+                      src={headphonesImage.imageUrl}
+                      alt={headphonesImage.description}
+                      width={800}
+                      height={600}
+                      data-ai-hint={headphonesImage.imageHint}
+                      className="w-full max-w-md h-auto opacity-20"
+                    />
+                  )}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-t from-background via-background/80 to-transparent">
+                      <p className="font-semibold text-primary/90 text-xl backdrop-blur-sm p-2 rounded-lg">
+                          Plug in your headphones for the best experience
+                      </p>
+                  </div>
                 </div>
                 <div className="mt-12">
                 <Button asChild size="lg" className="group">
