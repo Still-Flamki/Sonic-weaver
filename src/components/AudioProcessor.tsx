@@ -84,22 +84,13 @@ export default function AudioProcessor({
   }, []);
   
   useEffect(() => {
-    if (isPlaying && effectType === 'Custom') {
-      if(audioContext && wetNode?.gain) {
-        wetNode.gain.linearRampToValueAtTime(customReverb, audioContext.currentTime + 0.1);
-      }
-      if(audioContext && dryNode?.gain) {
-        dryNode.gain.linearRampToValueAtTime(1 - customReverb, audioContext.currentTime + 0.1);
-      }
-      if(audioContext && lowShelfFilter?.gain) {
-        lowShelfFilter.gain.linearRampToValueAtTime(customBass, audioContext.currentTime + 0.1);
-      }
-      if(audioContext && midPeakingFilter?.gain) {
-        midPeakingFilter.gain.linearRampToValueAtTime(customMid, audioContext.currentTime + 0.1);
-      }
-      if(audioContext && highShelfFilter?.gain) {
-        highShelfFilter.gain.linearRampToValueAtTime(customTreble, audioContext.currentTime + 0.1);
-      }
+    if (isPlaying && effectType === 'Custom' && audioContext) {
+        const rampTime = audioContext.currentTime + 0.1;
+        if(wetNode?.gain) wetNode.gain.linearRampToValueAtTime(customReverb, rampTime);
+        if(dryNode?.gain) dryNode.gain.linearRampToValueAtTime(1 - customReverb, rampTime);
+        if(lowShelfFilter?.gain) lowShelfFilter.gain.linearRampToValueAtTime(customBass, rampTime);
+        if(midPeakingFilter?.gain) midPeakingFilter.gain.linearRampToValueAtTime(customMid, rampTime);
+        if(highShelfFilter?.gain) highShelfFilter.gain.linearRampToValueAtTime(customTreble, rampTime);
     }
   }, [customReverb, customBass, customMid, customTreble, isPlaying, effectType]);
 
@@ -264,7 +255,7 @@ export default function AudioProcessor({
     midPeakingFilter = context.createBiquadFilter();
     midPeakingFilter.type = 'peaking';
     midPeakingFilter.frequency.value = 1000; // Mid frequencies
-    midPeakingFilter.Q.value = 1;
+    midPeakingFilter.Q.value = 0.8; // Wider Q to be more musical
     midPeakingFilter.gain.value = effectType === 'Custom' ? customMid : 0;
 
     highShelfFilter = context.createBiquadFilter();
@@ -311,7 +302,6 @@ export default function AudioProcessor({
         filterNode.connect(pannerNode);
     }
     
-    let finalNode = pannerNode;
     if (context instanceof OfflineAudioContext) {
       const offlineCompressor = context.createDynamicsCompressor();
       offlineCompressor.threshold.value = -18;
@@ -321,13 +311,9 @@ export default function AudioProcessor({
       offlineCompressor.release.value = 0.25;
       if (pannerNode) pannerNode.connect(offlineCompressor);
       offlineCompressor.connect(context.destination);
-      finalNode = offlineCompressor;
     } else if (compressorNode && pannerNode) {
         pannerNode.connect(compressorNode);
-        finalNode = compressorNode;
     }
-
-    return { gainNode, pannerNode, filterNode, lowShelfFilter, midPeakingFilter, highShelfFilter, finalNode };
 };
 
   const startSpatialAnimation = async () => {
@@ -370,7 +356,6 @@ export default function AudioProcessor({
     stopPreview();
     await audioContext.resume();
     
-    // Create new source node each time play is clicked
     sourceNode = audioContext.createBufferSource();
     sourceNode.buffer = decodedBuffer;
     sourceNode.loop = true;
@@ -385,7 +370,6 @@ export default function AudioProcessor({
     
     await startSpatialAnimation();
     
-    // This is the crucial connection
     if (gainNode && sourceNode) {
        sourceNode.connect(gainNode);
     }
@@ -523,11 +507,10 @@ export default function AudioProcessor({
             decodedBuffer.sampleRate
         );
 
-        // Re-create the full audio graph for the offline context
         const offlineSource = offlineCtx.createBufferSource();
         offlineSource.buffer = decodedBuffer;
         
-        const graph = await setupAudioGraph(offlineCtx);
+        await setupAudioGraph(offlineCtx);
 
         if(offlineCtx.listener.positionX) {
             offlineCtx.listener.positionX.value = 0;
@@ -537,19 +520,23 @@ export default function AudioProcessor({
             offlineCtx.listener.setPosition(0,0,0);
         }
 
-        if(graph.gainNode) {
-            offlineSource.connect(graph.gainNode);
+        if(gainNode) {
+            offlineSource.connect(gainNode);
         }
+        
+        const graphPannerNode = pannerNode;
+        const graphFilterNode = filterNode;
+        const graphGainNode = gainNode;
 
         const timeStep = 0.05;
         for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
             const { x, y, z, gain, freq } = getAnimationPath(time);
             const rampTime = time + timeStep;
-            graph.pannerNode?.positionX.linearRampToValueAtTime(x, rampTime);
-            graph.pannerNode?.positionY.linearRampToValueAtTime(y, rampTime);
-            graph.pannerNode?.positionZ.linearRampToValueAtTime(z, rampTime);
-            graph.filterNode?.frequency.linearRampToValueAtTime(freq, rampTime);
-            graph.gainNode?.gain.linearRampToValueAtTime(gain, rampTime);
+            graphPannerNode?.positionX.linearRampToValueAtTime(x, rampTime);
+            graphPannerNode?.positionY.linearRampToValueAtTime(y, rampTime);
+            graphPannerNode?.positionZ.linearRampToValueAtTime(z, rampTime);
+            graphFilterNode?.frequency.linearRampToValueAtTime(freq, rampTime);
+            graphGainNode?.gain.linearRampToValueAtTime(gain, rampTime);
         }
 
         offlineSource.start(0);
@@ -563,7 +550,7 @@ export default function AudioProcessor({
         a.href = url;
         a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.wav`;
         document.body.appendChild(a);
-a.click();
+        a.click();
         URL.revokeObjectURL(url);
         a.remove();
         
@@ -844,7 +831,3 @@ function VintageSwitch({ label, isActive, onToggle, disabled }: VintageSwitchPro
     </button>
   );
 }
-
-    
-
-    
