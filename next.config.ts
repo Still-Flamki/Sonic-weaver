@@ -34,25 +34,6 @@ const nextConfig: NextConfig = {
     // This allows requests from the Firebase Studio development environment.
     allowedDevOrigins: ["*.cloudworkstations.dev"],
   },
-  webpack: (config, { isServer }) => {
-    // This is required to make ffmpeg.wasm work.
-    config.resolve.fallback = { fs: false, path: false, crypto: false };
-    
-    config.module.rules.push({
-      test: /\.wasm$/,
-      type: 'asset/resource',
-    });
-
-    // This is the key change to prevent Webpack from trying to parse the ffmpeg library.
-    config.module.rules.push({
-      test: /@ffmpeg\/ffmpeg/,
-      parser: {
-        amd: false,
-      },
-    });
-
-    return config;
-  },
 };
 
 export default nextConfig;

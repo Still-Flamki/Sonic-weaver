@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle, Video, Music } from 'lucide-react';
+import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle, Music } from 'lucide-react';
 import type { EffectType } from './SonicWeaverApp';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
@@ -13,7 +13,6 @@ import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import AudioVisualizer, { VisualizationType } from './AudioVisualizer';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -52,7 +51,6 @@ export default function AudioProcessor({
   const [isDecoding, setIsDecoding] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
-  const [renderMessage, setRenderMessage] = useState('Rendering...');
   const [decodedBuffer, setDecodedBuffer] = useState<AudioBuffer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,20 +67,8 @@ export default function AudioProcessor({
   const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
   const [activeTab, setActiveTab] = useState('presets');
 
-  const converterWorkerRef = useRef<Worker | null>(null);
-
   const { toast } = useToast();
   
-  useEffect(() => {
-    // Initialize the conversion worker
-    converterWorkerRef.current = new Worker(new URL('../workers/converter.worker.ts', import.meta.url));
-
-    // Cleanup worker on component unmount
-    return () => {
-      converterWorkerRef.current?.terminate();
-    };
-  }, []);
-
   useEffect(() => {
     if (!audioContext) {
       try {
@@ -505,12 +491,12 @@ export default function AudioProcessor({
     return new Blob([bufferArray], { type: 'audio/wav' });
   }
 
-  const downloadFile = (blob: Blob, fileType: 'audio' | 'video', extension: 'wav' | 'mp4') => {
+  const downloadFile = (blob: Blob) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
-    a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.${extension}`;
+    a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.wav`;
     document.body.appendChild(a);
     a.click();
     URL.revokeObjectURL(url);
@@ -518,102 +504,11 @@ export default function AudioProcessor({
 
      toast({
         title: 'Download Ready!',
-        description: `Your processed ${fileType} has been downloaded.`,
+        description: `Your processed audio has been downloaded.`,
     });
   }
 
-  const convertWebMToMP4 = async (webmBlob: Blob): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-        if (!converterWorkerRef.current) {
-            return reject(new Error('Conversion worker not initialized.'));
-        }
-
-        const handleWorkerMessage = async (event: MessageEvent) => {
-            const { type, data, error, progress } = event.data;
-            if (type === 'conversion-complete') {
-                setRenderMessage('Download ready!');
-                setRenderProgress(1);
-                const mp4Blob = new Blob([data], { type: 'video/mp4' });
-                resolve(mp4Blob);
-                converterWorkerRef.current?.removeEventListener('message', handleWorkerMessage);
-            } else if (type === 'conversion-error') {
-                reject(new Error(error));
-                converterWorkerRef.current?.removeEventListener('message', handleWorkerMessage);
-            } else if (type === 'conversion-progress') {
-                setRenderProgress(progress);
-            }
-        };
-        
-        converterWorkerRef.current.addEventListener('message', handleWorkerMessage);
-
-        webmBlob.arrayBuffer().then(buffer => {
-            converterWorkerRef.current?.postMessage({
-                type: 'convert',
-                data: buffer,
-            }, [buffer]);
-        });
-    });
-};
-
-  const renderVideo = async (renderedBuffer: AudioBuffer): Promise<Blob> => {
-    return new Promise<Blob>((resolve, reject) => {
-        const canvas = visualizerCanvasRef.current;
-        if (!canvas) {
-            reject(new Error("Visualizer canvas not found"));
-            return;
-        }
-        
-        const videoStream = canvas.captureStream(30); // 30 FPS
-        
-        // Create a temporary audio context to play the rendered audio
-        const tempAudioCtx = new AudioContext();
-        const audioSource = tempAudioCtx.createBufferSource();
-        audioSource.buffer = renderedBuffer;
-        
-        // Create a destination for the audio stream
-        const audioDestination = tempAudioCtx.createMediaStreamDestination();
-        audioSource.connect(audioDestination);
-
-        // Get the audio track from the destination
-        const audioStream = audioDestination.stream;
-        
-        // Combine video and audio tracks into one stream
-        const combinedStream = new MediaStream([
-            videoStream.getVideoTracks()[0],
-            audioStream.getAudioTracks()[0],
-        ]);
-
-        const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm; codecs=vp9,opus' });
-        const chunks: Blob[] = [];
-        
-        recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-                chunks.push(e.data);
-            }
-        };
-
-        recorder.onstop = async () => {
-            const videoBlob = new Blob(chunks, { type: 'video/webm' });
-            await tempAudioCtx.close();
-            videoStream.getTracks().forEach(track => track.stop());
-            audioStream.getTracks().forEach(track => track.stop());
-            resolve(videoBlob);
-        };
-        
-        audioSource.onended = () => {
-            setTimeout(() => {
-                if (recorder.state === 'recording') {
-                    recorder.stop();
-                }
-            }, 500); // Add a small delay to ensure everything is captured
-        };
-
-        recorder.start();
-        audioSource.start();
-    });
-  };
-
-  const handleDownload = async (fileType: 'audio' | 'video') => {
+  const handleDownload = async () => {
     if (!decodedBuffer) {
         toast({
             title: 'No audio to download',
@@ -625,12 +520,11 @@ export default function AudioProcessor({
     
     setIsRendering(true);
     setRenderProgress(0);
-    setRenderMessage('Rendering audio...');
     const wasPlaying = isPlaying;
     stopPreview();
     toast({
-        title: `Rendering ${fileType}...`,
-        description: 'This may take a moment, especially for video.',
+        title: 'Rendering audio...',
+        description: 'This may take a moment.',
     });
 
     try {
@@ -684,7 +578,7 @@ export default function AudioProcessor({
 
         let lastProgress = 0;
         const progressInterval = setInterval(() => {
-          const progress = (offlineCtx.currentTime / decodedBuffer.duration) * 0.5; // Audio render is first 50%
+          const progress = offlineCtx.currentTime / decodedBuffer.duration;
           if (progress > lastProgress) {
              setRenderProgress(progress);
              lastProgress = progress;
@@ -693,28 +587,18 @@ export default function AudioProcessor({
 
         const renderedBuffer = await offlineCtx.startRendering();
         clearInterval(progressInterval);
-        setRenderProgress(0.5);
+        setRenderProgress(1);
 
-        if (fileType === 'video') {
-            setRenderMessage('Capturing video...');
-            const videoWebmBlob = await renderVideo(renderedBuffer);
-            
-            setRenderMessage('Converting to MP4...');
-            const videoMp4Blob = await convertWebMToMP4(videoWebmBlob);
-            downloadFile(videoMp4Blob, 'video', 'mp4');
-
-        } else {
-            const wavBlob = bufferToWav(renderedBuffer);
-            downloadFile(wavBlob, 'audio', 'wav');
-        }
+        const wavBlob = bufferToWav(renderedBuffer);
+        downloadFile(wavBlob);
 
     } catch (e) {
         console.error('Download/Render error:', e);
         const message = e instanceof Error ? e.message : 'Could not render the file.';
-        setError(`Failed to process the ${fileType}. ${message}`);
+        setError(`Failed to process the audio file. ${message}`);
         toast({
             title: 'Download Failed',
-            description: `Could not process the ${fileType}. See console for details.`,
+            description: `Could not process the audio. See console for details.`,
             variant: 'destructive',
         });
     } finally {
@@ -792,7 +676,7 @@ export default function AudioProcessor({
             {(isBusy || isRendering) && (
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
                   <RotateCw className="mb-4 h-12 w-12 animate-spin text-primary" />
-                  <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : `${renderMessage}`}</p>
+                  <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : `Rendering...`}</p>
                    {isRendering && <Progress value={renderProgress * 100} className="w-48 mt-4 h-2" />}
                </div>
             )}
@@ -817,10 +701,9 @@ export default function AudioProcessor({
                       onClick={() => handleEffectChange(effect)}
                       disabled={isBusy || isRendering}
                       className={cn(
-                          "rounded-md border p-4 text-lg font-semibold transition-all duration-200",
-                          "border-input bg-background/50 hover:bg-accent/80 hover:text-accent-foreground",
-                          effectType === effect ? "bg-accent text-accent-foreground border-accent-foreground/20 ring-2 ring-accent" : "text-muted-foreground",
-                          (isBusy || isRendering) && "cursor-not-allowed opacity-50"
+                        "rounded-md border p-4 text-lg font-semibold transition-all duration-200 text-muted-foreground hover:bg-muted/50",
+                        effectType === effect && "bg-accent text-accent-foreground border-accent-foreground/20 ring-2 ring-accent",
+                        (isBusy || isRendering) && "cursor-not-allowed opacity-50"
                       )}
                       >
                       {effect}
@@ -962,24 +845,10 @@ export default function AudioProcessor({
           {isPlaying ? 'Pause Preview' : 'Play Preview'}
         </Button>
         
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button disabled={!decodedBuffer || isBusy || isRendering} className="relative w-full sm:w-auto overflow-hidden">
-                    <Download className="mr-2 h-4 w-4" />
-                    <span>Download</span>
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => handleDownload('audio')} disabled={isRendering}>
-                    <Music className="mr-2 h-4 w-4" />
-                    <span>Audio Only (.wav)</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDownload('video')} disabled={isRendering}>
-                    <Video className="mr-2 h-4 w-4" />
-                    <span>Video with Visualizer (.mp4)</span>
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+        <Button onClick={() => handleDownload()} disabled={!decodedBuffer || isBusy || isRendering} className="relative w-full sm:w-auto overflow-hidden">
+            <Download className="mr-2 h-4 w-4" />
+            <span>Download Audio (.wav)</span>
+        </Button>
 
         <Button onClick={() => handleReset()} variant="ghost" className="w-full sm:w-auto sm:ml-auto" disabled={isBusy || isRendering}>
             Reset
