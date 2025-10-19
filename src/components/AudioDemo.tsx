@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Play, Pause } from 'lucide-react';
+import { Play, Pause, Waves } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -27,9 +28,9 @@ export default function AudioDemo() {
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         // Set up mastering compressor
         compressorNode = audioContext.createDynamicsCompressor();
-        compressorNode.threshold.value = -18; // More headroom
+        compressorNode.threshold.value = -18;
         compressorNode.knee.value = 20;
-        compressorNode.ratio.value = 8; // Less aggressive ratio
+        compressorNode.ratio.value = 8;
         compressorNode.attack.value = 0.005;
         compressorNode.release.value = 0.25;
         compressorNode.connect(audioContext.destination);
@@ -95,7 +96,6 @@ export default function AudioDemo() {
     const len = impulse.length;
     for (let i = 0; i < len; i++) {
         const t = i / rate;
-        // Use a decaying noise, but modulate it slightly for a more natural tail
         const noise = Math.random() * 2 - 1;
         const envelope = Math.pow(1 - t / duration, decay) * (1 - 0.5 * Math.sin(t * 10));
         left[i] = noise * envelope;
@@ -117,30 +117,25 @@ export default function AudioDemo() {
     const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
     path = { x, y, z };
     
-    // Gain automation based on distance from center.
     const distance = Math.sqrt(x * x + y * y + z * z);
     const minGain = 0.4;
     const maxGain = 0.8;
-
-    // Aggressive gain reduction for proximity to avoid loudness spikes
     const proximityThreshold = 1.2;
+
     if (distance < proximityThreshold) {
-        // Apply a curve to reduce gain more sharply as it gets closer
         const proximityFactor = Math.pow(distance / proximityThreshold, 1.5);
         gain = minGain * proximityFactor;
     } else {
-        // Normalize distance outside the threshold to map to gain range
         const distanceFactor = Math.min(1, (distance - proximityThreshold) / (radius - proximityThreshold));
         gain = minGain + (maxGain - minGain) * distanceFactor;
     }
-    gain = Math.max(0, Math.min(maxGain, gain)); // Clamp gain to prevent silence or excessive volume
+    gain = Math.max(0, Math.min(maxGain, gain));
 
 
     // Filter automation based on Z position (front/back)
-    // Sound is brighter in front, darker behind.
-    const baseFreq = 2500; // Lower base for more dramatic effect
+    const baseFreq = 2500;
     const freqRange = 15000;
-    const zNormalized = (z + radius) / (2 * radius); // Normalize Z to 0-1
+    const zNormalized = (z + radius) / (2 * radius);
     freq = baseFreq + (zNormalized * freqRange);
     
     return { ...path, gain, freq };
@@ -153,7 +148,6 @@ export default function AudioDemo() {
     const f = filterNode;
     const g = gainNode;
 
-    // Disconnect previous connections to be safe
     g.disconnect();
     
     if (!convolverNode) {
@@ -166,7 +160,6 @@ export default function AudioDemo() {
     const wetNode = audioContext.createGain();
     wetNode.gain.value = 0.25; 
 
-    // Route audio through the effect chain
     gainNode.connect(dryNode);
     gainNode.connect(wetNode);
     
@@ -176,7 +169,6 @@ export default function AudioDemo() {
     wetNode.connect(convolverNode);
     convolverNode.connect(p);
     
-    // Everything routes to the panner, then to the master compressor
     p.connect(compressorNode);
 
     const startTime = audioContext.currentTime;
@@ -190,7 +182,7 @@ export default function AudioDemo() {
       const time = audioContext.currentTime - startTime;
       const { x, y, z, gain: newGain, freq } = getAnimationPath(time);
 
-      const rampTime = audioContext.currentTime + 0.1; // Smoother ramp
+      const rampTime = audioContext.currentTime + 0.1;
       p.positionX.linearRampToValueAtTime(x, rampTime);
       p.positionY.linearRampToValueAtTime(y, rampTime);
       p.positionZ.linearRampToValueAtTime(z, rampTime);
@@ -223,7 +215,7 @@ export default function AudioDemo() {
 
       filterNode = audioContext.createBiquadFilter();
       filterNode.type = 'lowpass';
-      filterNode.Q.value = 0.7; // Smoother Q value
+      filterNode.Q.value = 0.7;
       
       if (audioContext.listener.positionX) {
         audioContext.listener.positionX.value = 0;
@@ -234,7 +226,6 @@ export default function AudioDemo() {
       }
       await startSpatialAnimation();
     } else {
-      // "Before" sound also goes through compressor for fair A/B test
       gainNode.connect(compressorNode);
     }
 
@@ -258,7 +249,6 @@ export default function AudioDemo() {
     pannerNode?.disconnect();
     filterNode?.disconnect();
     convolverNode?.disconnect();
-    // Do not disconnect the compressor from the destination
     
     setIsPlaying(false);
     setActivePlayer(null);
@@ -314,8 +304,15 @@ function DemoPlayerCard({
         <p className="text-sm text-muted-foreground">{description}</p>
       </CardHeader>
       <CardContent className="flex flex-col items-center justify-center gap-4 pt-4 pb-8">
-        <div className={`relative w-48 h-48 flex items-center justify-center rounded-lg overflow-hidden ${isEnhanced ? 'bg-primary/10' : 'bg-muted/50'}`}>
-           <p className="text-muted-foreground text-sm font-mono">{isEnhanced ? '< 11D Processed >' : '< Mono Source >'}</p>
+        <div className={cn(
+            "relative w-48 h-48 flex items-center justify-center rounded-lg overflow-hidden transition-all",
+             isEnhanced ? 'bg-primary/10' : 'bg-muted/50',
+             isPlaying && isEnhanced && 'animate-pulse'
+        )}>
+           <Waves className={cn(
+               "h-24 w-24 transition-colors",
+               isPlaying ? 'text-primary' : 'text-muted-foreground/50'
+            )} />
         </div>
         <Button onClick={onTogglePlay} size="lg" variant={isEnhanced ? 'default' : 'outline'} className="w-48">
           <Icon className="mr-2 h-5 w-5" />
@@ -325,7 +322,3 @@ function DemoPlayerCard({
     </Card>
   );
 }
-
-    
-
-    
