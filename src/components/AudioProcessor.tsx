@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useTransition, ChangeEvent, Dispatch, SetStateAction } from 'react';
+import { useState, useTransition, ChangeEvent, Dispatch, SetStateAction, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { UploadCloud, Download, FileAudio, RotateCw, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, Download, FileAudio, RotateCw, CheckCircle2, Play, Pause } from 'lucide-react';
 import type { EffectType } from './SonicWeaverApp';
 import { useToast } from '@/hooks/use-toast';
+import { processAudio } from '@/app/actions/processAudio';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Terminal } from 'lucide-react';
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -25,21 +27,25 @@ export default function AudioProcessor({
   setAudioFile,
 }: AudioProcessorProps) {
   const [isProcessing, startProcessing] = useTransition();
-  const [progress, setProgress] = useState(0);
-  const [isProcessed, setIsProcessed] = useState(false);
+  const [processedAudio, setProcessedAudio] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const { toast } = useToast();
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.type === 'audio/mpeg' || file.type === 'audio/wav') {
+      if (file.type.startsWith('audio/')) {
         setAudioFile(file);
-        setIsProcessed(false);
-        setProgress(0);
+        setProcessedAudio(null);
+        if (audioRef.current) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        }
       } else {
         toast({
           title: 'Invalid File Type',
-          description: 'Please upload an MP3 or WAV file.',
+          description: 'Please upload a valid audio file.',
           variant: 'destructive',
         });
       }
@@ -56,56 +62,77 @@ export default function AudioProcessor({
       return;
     }
 
-    startProcessing(() => {
-      setIsProcessed(false);
-      setProgress(0);
-      const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 95) {
-            return prev;
+    startProcessing(async () => {
+      setProcessedAudio(null);
+      try {
+        const reader = new FileReader();
+        reader.readAsDataURL(audioFile);
+        reader.onload = async () => {
+          const base64Audio = reader.result as string;
+          try {
+            const result = await processAudio({
+              audio: base64Audio,
+              effect: effectType,
+            });
+            setProcessedAudio(result.processedAudio);
+            toast({
+              title: 'Processing Complete!',
+              description: `Your ${effectType} audio is ready.`,
+            });
+          } catch (error) {
+            console.error('Processing error:', error);
+            toast({
+              title: 'Processing Failed',
+              description: 'Something went wrong while processing the audio.',
+              variant: 'destructive',
+            });
           }
-          return prev + 5;
-        });
-      }, 200);
-
-      // Simulate network and processing delay
-      setTimeout(() => {
-        clearInterval(interval);
-        setProgress(100);
-        setIsProcessed(true);
+        };
+      } catch (error) {
+        console.error('File reading error:', error);
         toast({
-          title: 'Processing Complete!',
-          description: `Your ${effectType} audio is ready for download.`,
+          title: 'File Error',
+          description: 'Could not read the audio file.',
+          variant: 'destructive',
         });
-      }, 4000);
+      }
     });
   };
 
   const handleDownload = () => {
-    if (audioFile && isProcessed) {
-      // Mock download by creating a URL for the original file
-      const url = URL.createObjectURL(audioFile);
+    if (processedAudio) {
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `sonic-weaver-${effectType}-${audioFile.name}`;
+      a.href = processedAudio;
+      a.download = `sonic-weaver-${effectType}-${audioFile?.name || 'audio.wav'}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
     }
   };
   
   const handleReset = () => {
     setAudioFile(null);
-    setIsProcessed(false);
-    setProgress(0);
+    setProcessedAudio(null);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const togglePreview = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
   };
 
   return (
     <Card className="w-full shadow-lg border-border/50">
       <CardHeader>
         <CardTitle className="font-headline text-2xl">Audio Converter</CardTitle>
-        <CardDescription>Upload your track and select an effect to get started.</CardDescription>
+        <CardDescription>Upload your track, select an AI effect, and preview the result.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
@@ -118,7 +145,7 @@ export default function AudioProcessor({
               id="audio-upload"
               type="file"
               className="sr-only"
-              accept=".mp3,.wav"
+              accept="audio/*"
               onChange={handleFileChange}
               disabled={isProcessing}
             />
@@ -134,7 +161,7 @@ export default function AudioProcessor({
               <div className="flex flex-col items-center text-center text-muted-foreground">
                 <UploadCloud className="mb-4 h-12 w-12" />
                 <p className="font-semibold">Click to upload or drag & drop</p>
-                <p className="text-sm">MP3 or WAV files supported</p>
+                <p className="text-sm">Any audio format supported</p>
               </div>
             )}
           </div>
@@ -162,14 +189,25 @@ export default function AudioProcessor({
           </RadioGroup>
         </div>
 
-        {(isProcessing || isProcessed) && (
-          <div className="space-y-2 pt-4">
-            <Label>3. Processing</Label>
-            <div className="flex items-center gap-4">
-              <Progress value={progress} className="w-full" />
-              <span className="text-sm font-semibold text-muted-foreground">{progress}%</span>
-            </div>
-          </div>
+        {isProcessing && (
+          <Alert>
+            <Terminal className="h-4 w-4" />
+            <AlertTitle>Processing Audio</AlertTitle>
+            <AlertDescription>
+              The AI is weaving its magic. This may take a moment...
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {processedAudio && (
+          <audio
+            ref={audioRef}
+            src={processedAudio}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onEnded={() => setIsPlaying(false)}
+            className="hidden"
+          />
         )}
       </CardContent>
       <CardFooter className="flex flex-col sm:flex-row gap-2">
@@ -179,16 +217,20 @@ export default function AudioProcessor({
               <RotateCw className="mr-2 h-4 w-4 animate-spin" />
               Processing...
             </>
-          ) : isProcessed ? (
+          ) : processedAudio ? (
             <>
               <CheckCircle2 className="mr-2 h-4 w-4" />
-              Processed
+              Process Again
             </>
           ) : (
-            'Convert Audio'
+            'Process Audio'
           )}
         </Button>
-        <Button onClick={handleDownload} disabled={!isProcessed || isProcessing} className="w-full sm:w-auto">
+        <Button onClick={togglePreview} disabled={!processedAudio || isProcessing} className="w-full sm:w-auto" variant="secondary">
+          {isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+          {isPlaying ? 'Pause' : 'Preview'}
+        </Button>
+        <Button onClick={handleDownload} disabled={!processedAudio || isProcessing} className="w-full sm:w-auto">
           <Download className="mr-2 h-4 w-4" />
           Download
         </Button>
