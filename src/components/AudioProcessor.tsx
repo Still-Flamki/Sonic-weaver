@@ -72,7 +72,8 @@ export default function AudioProcessor({
 
   useEffect(() => {
     // Initialize the conversion worker
-    conversionWorkerRef.current = new (require('@/workers/converter.worker.ts') as any).default();
+    const worker = new Worker(new URL('@/workers/converter.worker.ts', import.meta.url));
+    conversionWorkerRef.current = worker;
 
     conversionWorkerRef.current.onmessage = (event) => {
         const { type, data, error: workerError, progress } = event.data;
