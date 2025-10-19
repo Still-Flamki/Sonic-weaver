@@ -33,6 +33,7 @@ export default function AudioProcessor({
   setAudioFile,
 }: AudioProcessorProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRendering, setIsRendering] = useState(false);
   const [processedBuffer, setProcessedBuffer] = useState<AudioBuffer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +109,7 @@ export default function AudioProcessor({
     }
   };
 
-  const createReverbImpulseResponse = async (context: AudioContext): Promise<AudioBuffer> => {
+  const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
     const duration = 2; // seconds
     const decay = 3;
@@ -124,6 +125,62 @@ export default function AudioProcessor({
     return impulse;
   };
 
+  const getAnimationPath = (time: number) => {
+    const radius = 3;
+    const zRadius = radius * 1.5;
+    let duration: number;
+    let path: { x: number; y: number; z: number };
+
+    switch (effectType) {
+      case '4D':
+        duration = 4; // Clean right-to-left sweep
+        const angle4d = (time / duration) * Math.PI;
+        path = { x: Math.cos(angle4d) * radius, y: 0, z: -1 };
+        break;
+      case '8D':
+        duration = 8; // Professional circular path
+        const angle8d = (time / duration) * 2 * Math.PI;
+        path = { x: Math.sin(angle8d) * radius, y: 0, z: Math.cos(angle8d) * radius };
+        break;
+      case '11D':
+        duration = 8; // Right -> Front -> Left -> Back -> Loop
+        const segmentDuration = duration / 4;
+        const segment = Math.floor((time % duration) / segmentDuration);
+        const segmentTime = (time % duration) - (segment * segmentDuration);
+        const progress = segmentTime / segmentDuration;
+
+        let x = 0, y = 0, z = 0;
+        
+        switch(segment) {
+          case 0: // Right to Front
+            x = radius * (1 - progress);
+            z = -zRadius * progress;
+            break;
+          case 1: // Front to Left
+            x = -radius * progress;
+            z = -zRadius * (1 - progress);
+            break;
+          case 2: // Left to Back
+            x = -radius * (1 - progress);
+            z = zRadius * progress;
+            break;
+          case 3: // Back to Right
+            x = radius * progress;
+            z = zRadius * (1 - progress);
+            break;
+        }
+        path = { x, y, z };
+        break;
+      default:
+        path = { x: 0, y: 0, z: 0 };
+    }
+    
+    const distance = Math.sqrt(path.x*path.x + path.y*path.y + path.z*path.z);
+    const gain = 1 - (distance / (radius * 2));
+    const freq = path.z > 0 ? 3000 + (path.z / zRadius) * 2000 : 5000 + (path.z + zRadius) / (2 * zRadius) * 10000;
+    
+    return { ...path, gain, freq };
+  };
 
   const startSpatialAnimation = async () => {
     if (!audioContext || !pannerNode || !filterNode || !gainNode) return;
@@ -131,7 +188,6 @@ export default function AudioProcessor({
     const p = pannerNode;
     const f = filterNode;
     const g = gainNode;
-    const radius = 3;
 
     if (effectType === '11D') {
       if (!convolverNode) {
@@ -147,69 +203,16 @@ export default function AudioProcessor({
       gainNode.connect(dryNode);
       gainNode.connect(wetNode);
       wetNode.connect(convolverNode);
-      dryNode.connect(filterNode);
-      convolverNode.connect(filterNode);
-      filterNode.connect(pannerNode);
+      convolverNode.connect(p.context.destination);
+      dryNode.connect(f);
+      f.connect(p);
 
     } else {
-        gainNode.connect(filterNode);
-        filterNode.connect(pannerNode);
+        gainNode.connect(f);
+        f.connect(p);
     }
-
-
-    let duration: number;
-    let path: (time: number) => { x: number; y: number; z: number };
-    const zRadius = radius * 1.5; // Exaggerate front-back distance
-
-    switch (effectType) {
-      case '4D':
-        duration = 4; // Clean right-to-left sweep
-        path = (time) => {
-          const angle = (time / duration) * Math.PI;
-          return { x: Math.cos(angle) * radius, y: 0, z: -1 };
-        };
-        break;
-      case '8D':
-        duration = 8; // Professional circular path
-        path = (time) => {
-          const angle = (time / duration) * 2 * Math.PI;
-          return { x: Math.sin(angle) * radius, y: 0, z: Math.cos(angle) * radius };
-        };
-        break;
-      case '11D':
-        duration = 8; // Right -> Front -> Left -> Back -> Loop
-        path = (time) => {
-          const segmentDuration = duration / 4;
-          const segment = Math.floor((time % duration) / segmentDuration);
-          const segmentTime = (time % duration) - (segment * segmentDuration);
-          const progress = segmentTime / segmentDuration;
-
-          let x = 0, y = 0, z = 0;
-          
-          switch(segment) {
-            case 0: // Right to Front
-              x = radius * (1 - progress);
-              z = -zRadius * progress;
-              break;
-            case 1: // Front to Left
-              x = -radius * progress;
-              z = -zRadius * (1 - progress);
-              break;
-            case 2: // Left to Back
-              x = -radius * (1 - progress);
-              z = zRadius * progress;
-              break;
-            case 3: // Back to Right
-              x = radius * progress;
-              z = zRadius * (1 - progress);
-              break;
-          }
-          return { x, y, z };
-        };
-        break;
-      default:
-        return;
-    }
+    
+    p.connect(audioContext.destination);
 
     const startTime = audioContext.currentTime;
 
@@ -220,20 +223,13 @@ export default function AudioProcessor({
       };
 
       const time = audioContext.currentTime - startTime;
-      const { x, y, z } = path(time);
+      const { x, y, z, gain: newGain, freq } = getAnimationPath(time);
       
       p.positionX.linearRampToValueAtTime(x, audioContext.currentTime + 0.05);
       p.positionY.linearRampToValueAtTime(y, audioContext.currentTime + 0.05);
       p.positionZ.linearRampToValueAtTime(z, audioContext.currentTime + 0.05);
-      
-      // More aggressive filter for back position
-      const freq = z > 0 ? 3000 + (z / zRadius) * 2000 : 5000 + (z + zRadius) / (2 * zRadius) * 10000;
       f.frequency.linearRampToValueAtTime(freq, audioContext.currentTime + 0.05);
-
-      const distance = Math.sqrt(x*x + y*y + z*z);
-      const newGain = 1 - (distance / (radius * 2));
       g.gain.linearRampToValueAtTime(newGain, audioContext.currentTime + 0.05);
-
 
       animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -269,9 +265,7 @@ export default function AudioProcessor({
        audioContext.listener.setPosition(0,0,0);
     }
     
-    pannerNode.connect(audioContext.destination);
     sourceNode.connect(gainNode);
-
     
     sourceNode.onended = () => {
       stopPreview();
@@ -296,7 +290,6 @@ export default function AudioProcessor({
     if (filterNode) filterNode.disconnect();
     if (pannerNode) pannerNode.disconnect();
     if (convolverNode) {
-      // Disconnect but don't nullify, so we can reuse the impulse response
       convolverNode.disconnect();
     }
     
@@ -319,14 +312,168 @@ export default function AudioProcessor({
     const fileInput = document.getElementById('audio-upload') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
   };
+  
+  const bufferToWav = (buffer: AudioBuffer): Blob => {
+    const numOfChan = buffer.numberOfChannels;
+    const length = buffer.length * numOfChan * 2 + 44;
+    const bufferArray = new ArrayBuffer(length);
+    const view = new DataView(bufferArray);
+    const channels = [];
+    let i, sample;
+    let offset = 0;
+    let pos = 0;
 
-  const handleDownload = () => {
+    const setUint16 = (data: number) => {
+        view.setUint16(pos, data, true);
+        pos += 2;
+    }
+
+    const setUint32 = (data: number) => {
+        view.setUint32(pos, data, true);
+        pos += 4;
+    }
+
+    setUint32(0x46464952); // "RIFF"
+    setUint32(length - 8); // file length - 8
+    setUint32(0x45564157); // "WAVE"
+
+    setUint32(0x20746d66); // "fmt " chunk
+    setUint32(16); // length of format data
+    setUint16(1); // PCM - integer samples
+    setUint16(numOfChan); // two channels
+    setUint32(buffer.sampleRate); // sample rate
+    setUint32(buffer.sampleRate * 2 * numOfChan); // byte rate
+    setUint16(numOfChan * 2); // block align
+    setUint16(16); // bits per sample
+
+    setUint32(0x61746164); // "data" - chunk
+    setUint32(length - pos - 4); // chunk length
+
+    for (i = 0; i < buffer.numberOfChannels; i++)
+        channels.push(buffer.getChannelData(i));
+
+    while (pos < length) {
+        for (i = 0; i < numOfChan; i++) {
+            sample = Math.max(-1, Math.min(1, channels[i][offset]));
+            sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+            view.setInt16(pos, sample, true);
+            pos += 2;
+        }
+        offset++;
+    }
+
+    return new Blob([bufferArray], { type: 'audio/wav' });
+  }
+
+  const handleDownload = async () => {
+    if (!processedBuffer) {
+        toast({
+            title: 'No audio to download',
+            description: 'Please process an audio file first.',
+            variant: 'destructive',
+        });
+        return;
+    }
+    
+    setIsRendering(true);
+    stopPreview();
     toast({
-      title: 'Download Not Implemented',
-      description: 'Offline rendering is a complex feature not yet implemented.',
-      variant: 'default',
+        title: 'Rendering Audio...',
+        description: 'Preparing your file for download. This may take a moment.',
     });
+
+    try {
+        const offlineCtx = new OfflineAudioContext(
+            processedBuffer.numberOfChannels,
+            processedBuffer.length,
+            processedBuffer.sampleRate
+        );
+
+        const offlineSource = offlineCtx.createBufferSource();
+        offlineSource.buffer = processedBuffer;
+
+        const offlinePanner = offlineCtx.createPanner();
+        offlinePanner.panningModel = 'HRTF';
+        offlinePanner.distanceModel = 'inverse';
+
+        const offlineFilter = offlineCtx.createBiquadFilter();
+        offlineFilter.type = 'lowpass';
+        offlineFilter.Q.value = 1;
+        
+        const offlineGain = offlineCtx.createGain();
+
+        if(offlineCtx.listener.positionX) {
+            offlineCtx.listener.positionX.value = 0;
+            offlineCtx.listener.positionY.value = 0;
+            offlineCtx.listener.positionZ.value = 0;
+        } else {
+            offlineCtx.listener.setPosition(0,0,0);
+        }
+
+        offlineSource.connect(offlineGain);
+
+        let offlineConvolver: ConvolverNode | null = null;
+        if (effectType === '11D') {
+            offlineConvolver = offlineCtx.createConvolver();
+            offlineConvolver.buffer = await createReverbImpulseResponse(offlineCtx);
+            const dryNode = offlineCtx.createGain();
+            dryNode.gain.value = 0.7;
+            const wetNode = offlineCtx.createGain();
+            wetNode.gain.value = 0.3;
+            offlineGain.connect(dryNode);
+            offlineGain.connect(wetNode);
+            wetNode.connect(offlineConvolver);
+            offlineConvolver.connect(offlineCtx.destination);
+            dryNode.connect(offlineFilter);
+            offlineFilter.connect(offlinePanner);
+        } else {
+            offlineGain.connect(offlineFilter);
+            offlineFilter.connect(offlinePanner);
+        }
+        offlinePanner.connect(offlineCtx.destination);
+        
+        const timeStep = 0.05;
+        for (let time = 0; time < processedBuffer.duration; time += timeStep) {
+            const { x, y, z, gain, freq } = getAnimationPath(time);
+            offlinePanner.positionX.linearRampToValueAtTime(x, time);
+            offlinePanner.positionY.linearRampToValueAtTime(y, time);
+            offlinePanner.positionZ.linearRampToValueAtTime(z, time);
+            offlineFilter.frequency.linearRampToValueAtTime(freq, time);
+            offlineGain.gain.linearRampToValueAtTime(gain, time);
+        }
+
+        offlineSource.start(0);
+        const renderedBuffer = await offlineCtx.startRendering();
+        
+        const wavBlob = bufferToWav(renderedBuffer);
+        const url = URL.createObjectURL(wavBlob);
+        
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.wav`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+        
+        toast({
+            title: 'Download Ready!',
+            description: 'Your processed audio has been downloaded.',
+        });
+    } catch (e) {
+        console.error('Offline rendering error:', e);
+        setError('Failed to render the audio for download.');
+        toast({
+            title: 'Download Failed',
+            description: 'Could not render the audio file.',
+            variant: 'destructive',
+        });
+    } finally {
+        setIsRendering(false);
+    }
   };
+
 
   return (
     <Card className="w-full shadow-lg border-border/50">
@@ -347,7 +494,7 @@ export default function AudioProcessor({
               className="sr-only"
               accept="audio/*"
               onChange={handleFileChange}
-              disabled={isProcessing}
+              disabled={isProcessing || isRendering}
             />
             {audioFile ? (
               <div className="flex flex-col items-center text-center">
@@ -374,7 +521,6 @@ export default function AudioProcessor({
             onValueChange={(value: EffectType) => {
               stopPreview();
               setEffectType(value);
-              // Small delay to allow nodes to disconnect before reconnecting
               setTimeout(() => {
                 if (isPlaying || (processedBuffer && audioFile)) {
                    playPreview();
@@ -382,7 +528,7 @@ export default function AudioProcessor({
               }, 50);
             }}
             className="grid grid-cols-3 gap-4"
-            disabled={isProcessing}
+            disabled={isProcessing || isRendering}
           >
             {['4D', '8D', '11D'].map(effect => (
               <Label
@@ -398,12 +544,12 @@ export default function AudioProcessor({
           </RadioGroup>
         </div>
 
-        {isProcessing && (
+        {(isProcessing || isRendering) && (
           <Alert>
             <Terminal className="h-4 w-4" />
-            <AlertTitle>Decoding Audio</AlertTitle>
+            <AlertTitle>{isRendering ? 'Rendering Audio' : 'Decoding Audio'}</AlertTitle>
             <AlertDescription>
-              Preparing your audio file. This should be quick...
+              {isRendering ? 'Preparing your file for download...' : 'Preparing your audio file. This should be quick...'}
             </AlertDescription>
           </Alert>
         )}
@@ -418,7 +564,7 @@ export default function AudioProcessor({
 
       </CardContent>
       <CardFooter className="flex flex-col sm:flex-row gap-2">
-        <Button onClick={handleProcess} disabled={isProcessing || !audioFile} className="w-full sm:w-auto">
+        <Button onClick={handleProcess} disabled={isProcessing || isRendering || !audioFile} className="w-full sm:w-auto">
           {isProcessing ? (
             <>
               <RotateCw className="mr-2 h-4 w-4 animate-spin" />
@@ -433,15 +579,24 @@ export default function AudioProcessor({
             'Process Audio'
           )}
         </Button>
-        <Button onClick={togglePreview} disabled={!processedBuffer || isProcessing} className="w-full sm:w-auto" variant="secondary">
+        <Button onClick={togglePreview} disabled={!processedBuffer || isProcessing || isRendering} className="w-full sm:w-auto" variant="secondary">
           {isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
           {isPlaying ? 'Pause' : 'Preview'}
         </Button>
-        <Button onClick={handleDownload} disabled={!processedBuffer || isProcessing} className="w-full sm:w-auto">
-          <Download className="mr-2 h-4 w-4" />
-          Download
+        <Button onClick={handleDownload} disabled={!processedBuffer || isProcessing || isRendering} className="w-full sm:w-auto">
+          {isRendering ? (
+            <>
+              <RotateCw className="mr-2 h-4 w-4 animate-spin" />
+              Rendering...
+            </>
+          ) : (
+            <>
+              <Download className="mr-2 h-4 w-4" />
+              Download
+            </>
+          )}
         </Button>
-        <Button onClick={handleReset} variant="outline" className="w-full sm:w-auto sm:ml-auto" disabled={isProcessing}>
+        <Button onClick={handleReset} variant="outline" className="w-full sm:w-auto sm:ml-auto" disabled={isProcessing || isRendering}>
             Reset
         </Button>
       </CardFooter>
