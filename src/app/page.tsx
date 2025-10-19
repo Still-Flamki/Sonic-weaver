@@ -27,9 +27,18 @@ export default function Home() {
       <div className="relative z-10 flex flex-1 flex-col">
         <Header />
         <main className="flex-1">
-          <section className="container mx-auto px-4 md:px-6 py-12 md:py-20 text-center">
-             <div className="max-w-4xl mx-auto">
-                <Badge variant="outline" className="text-sm py-1 px-3 border-primary/50 mb-4">
+          <section className="relative container mx-auto px-4 md:px-6 py-12 md:py-20 text-center overflow-hidden">
+             {headphonesImage && (
+              <Image 
+                src={headphonesImage.imageUrl}
+                alt={headphonesImage.description}
+                fill
+                data-ai-hint={headphonesImage.imageHint}
+                className="object-contain object-center opacity-10"
+              />
+            )}
+            <div className="relative z-10 max-w-4xl mx-auto">
+                <Badge variant="outline" className="text-sm py-1 px-3 border-primary/50 mb-4 backdrop-blur-sm">
                     <SlidersHorizontal className="mr-2 h-4 w-4 text-primary" />
                     Advanced Spatial Audio
                 </Badge>
@@ -39,22 +48,11 @@ export default function Home() {
                 <p className="mt-4 max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground">
                 Our tools transform your flat audio into an immersive spatial experience. Hear the difference for yourself.
                 </p>
-                <div className="mt-10 relative flex flex-col items-center justify-center gap-4">
-                  {headphonesImage && (
-                    <Image 
-                      src={headphonesImage.imageUrl}
-                      alt={headphonesImage.description}
-                      width={800}
-                      height={600}
-                      data-ai-hint={headphonesImage.imageHint}
-                      className="w-full max-w-md h-auto opacity-20"
-                    />
-                  )}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-t from-background via-background/80 to-transparent">
-                      <p className="font-semibold text-primary/90 text-xl backdrop-blur-sm p-2 rounded-lg">
-                          Plug in your headphones for the best experience
-                      </p>
-                  </div>
+                <div className="mt-10 flex flex-col items-center justify-center">
+                    <p className="font-semibold text-primary/90 text-xl backdrop-blur-sm p-2 rounded-lg">
+                        <Headphones className="inline-block mr-2 h-6 w-6" />
+                        Plug in your headphones for the best experience
+                    </p>
                 </div>
                 <div className="mt-12">
                 <Button asChild size="lg" className="group">
