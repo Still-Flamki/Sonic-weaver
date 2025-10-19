@@ -16,7 +16,7 @@ const themes = [
 ];
 
 export function ThemeSwitcher() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export function ThemeSwitcher() {
                 onClick={() => setTheme(t.value)}
                 className={cn(
                   "h-6 w-6 rounded-full border-2 transition-all hover:scale-110",
-                  theme === t.value ? 'border-primary' : 'border-transparent'
+                  resolvedTheme === t.value ? 'border-primary' : 'border-transparent'
                 )}
                 style={t.style}
                 aria-label={`Switch to ${t.name} theme`}
