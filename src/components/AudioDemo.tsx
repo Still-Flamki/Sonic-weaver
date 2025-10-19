@@ -116,9 +116,10 @@ export default function AudioDemo() {
     
     // Gain automation based on distance from center.
     const distance = Math.sqrt(x * x + y * y + z * z);
-    const maxDistance = radius * 1.2;
-    gain = 1.0 - (distance / maxDistance) * 0.5;
-    gain = Math.max(0.5, Math.min(1.0, gain));
+    const minGain = 0.5; // The quietest the sound can get
+    const maxGain = 0.9; // The loudest it can get (prevents clipping when close)
+    gain = maxGain - (distance / radius) * (maxGain - minGain);
+    gain = Math.max(minGain, Math.min(maxGain, gain));
 
     // Filter automation based on Z position (front/back)
     // Sound is brighter in front, darker behind.

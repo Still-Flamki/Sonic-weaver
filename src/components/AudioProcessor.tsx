@@ -102,7 +102,7 @@ export default function AudioProcessor({
         highShelfFilter.gain.linearRampToValueAtTime(customTreble, audioContext.currentTime + 0.1);
       }
     }
-  }, [customReverb, customBass, customMid, customTreble, isPlaying, effectType, audioContext]);
+  }, [customReverb, customBass, customMid, customTreble, isPlaying, effectType]);
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -187,14 +187,14 @@ export default function AudioProcessor({
         duration = 16 - customSpeed; // Inverse relationship: higher speed value means shorter duration
     }
 
-
     switch (currentEffect) {
       case '4D':
       case 'Wide Arc': {
+        const angle = time * (Math.PI / duration); // Slower, wider arc
         path = {
-          x: radius * Math.sin(time * (Math.PI / (duration / 2))),
+          x: radius * Math.sin(angle),
           y: 0,
-          z: -radius * Math.cos(time * (Math.PI / (duration / 2))),
+          z: -radius * Math.cos(angle),
         };
         gain = 1.0;
         freq = 22050;
@@ -204,21 +204,22 @@ export default function AudioProcessor({
       case 'Circle': {
         const angle = (2 * Math.PI / duration) * time;
         path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
-        gain = 1.0;
+        gain = 1.0; // Constant gain for 8D
         freq = 22050;
         break;
       }
       case '11D':
       case 'Figure-8': {
         const x = radius * Math.sin((2 * Math.PI / duration) * time);
-        const z = radius * Math.sin((Math.PI / duration) * time);
+        const z = radius * Math.cos((2 * Math.PI / duration) * time);
         const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
         path = { x, y, z };
         
         const distance = Math.sqrt(x * x + y * y + z * z);
-        const maxDistance = radius * 1.2; 
-        gain = 1.0 - (distance / maxDistance) * 0.5; 
-        gain = Math.max(0.5, Math.min(1.0, gain)); 
+        const minGain = 0.5; // The quietest the sound can get
+        const maxGain = 0.9; // The loudest it can get (prevents clipping when close)
+        gain = maxGain - (distance / radius) * (maxGain - minGain);
+        gain = Math.max(minGain, Math.min(maxGain, gain));
 
         const baseFreq = 2500;
         const freqRange = 15000;
@@ -262,48 +263,41 @@ export default function AudioProcessor({
     highShelfFilter.gain.value = effectType === 'Custom' ? customTreble : 0;
 
 
-    const shouldUseReverb = effectType === '11D' || effectType === 'Custom';
+    const shouldUseReverb = effectType === '11D' || (effectType === 'Custom' && customReverb > 0);
     const reverbAmount = effectType === 'Custom' ? customReverb : 0.25;
 
+    // Connect EQ chain: gain -> low -> mid -> high
     if (gainNode && lowShelfFilter && midPeakingFilter && highShelfFilter) {
-      // Connect EQ chain: gain -> low -> mid -> high
       gainNode.connect(lowShelfFilter);
       lowShelfFilter.connect(midPeakingFilter);
       midPeakingFilter.connect(highShelfFilter);
     }
     
-
     let lastNodeInChain: AudioNode | null = highShelfFilter;
 
-    if (shouldUseReverb) {
-        if (!convolverNode) {
-            convolverNode = context.createConvolver();
-            convolverNode.buffer = await createReverbImpulseResponse(context as BaseAudioContext);
-        }
-        if (!dryNode) dryNode = context.createGain();
-        if (!wetNode) wetNode = context.createGain();
+    if (shouldUseReverb && lastNodeInChain) {
+        convolverNode = context.createConvolver();
+        convolverNode.buffer = await createReverbImpulseResponse(context as BaseAudioContext);
+
+        dryNode = context.createGain();
+        wetNode = context.createGain();
         
         dryNode.gain.value = 1 - reverbAmount;
         wetNode.gain.value = reverbAmount;
 
-        if(lastNodeInChain) {
-            lastNodeInChain.connect(dryNode);
-            lastNodeInChain.connect(wetNode);
-        }
+        lastNodeInChain.connect(dryNode);
+        lastNodeInChain.connect(wetNode);
 
-        if(convolverNode && pannerNode && wetNode) {
-            wetNode.connect(convolverNode);
-            convolverNode.connect(pannerNode);
+        wetNode.connect(convolverNode);
+
+        if (filterNode && pannerNode) {
+          dryNode.connect(filterNode);
+          filterNode.connect(pannerNode);
+          convolverNode.connect(pannerNode);
         }
-        if(filterNode && pannerNode && dryNode) {
-            dryNode.connect(filterNode);
-            filterNode.connect(pannerNode);
-        }
-    } else {
-        if(lastNodeInChain && filterNode && pannerNode) {
-            lastNodeInChain.connect(filterNode);
-            filterNode.connect(pannerNode);
-        }
+    } else if (lastNodeInChain && filterNode && pannerNode) {
+        lastNodeInChain.connect(filterNode);
+        filterNode.connect(pannerNode);
     }
     
     if (context instanceof OfflineAudioContext) {
@@ -313,7 +307,7 @@ export default function AudioProcessor({
       offlineCompressor.ratio.value = 12;
       offlineCompressor.attack.value = 0.003;
       offlineCompressor.release.value = 0.25;
-      pannerNode?.connect(offlineCompressor);
+      if (pannerNode) pannerNode.connect(offlineCompressor);
       offlineCompressor.connect(context.destination);
     } else if (compressorNode && pannerNode) {
         pannerNode.connect(compressorNode);
@@ -357,18 +351,17 @@ export default function AudioProcessor({
   };
 
   const playPreview = async () => {
-    if (!decodedBuffer || !audioContext || !compressorNode) return;
+    if (!decodedBuffer || !audioContext) return;
     
     if (isPlaying) {
-      stopPreview();
-      // We want to stop, not toggle, if it's already playing but we click again.
-      // But if we want to restart with new settings, we let it continue.
-      // The togglePreview handles this logic.
+      // If we are already playing, we just need to ensure the graph is updated, not restart everything
+      await setupAudioGraph(audioContext);
       return;
     }
 
     await audioContext.resume();
-
+    
+    // Create new source node each time play is clicked
     sourceNode = audioContext.createBufferSource();
     sourceNode.buffer = decodedBuffer;
     sourceNode.loop = true;
@@ -382,7 +375,8 @@ export default function AudioProcessor({
     }
     
     await startSpatialAnimation();
-
+    
+    // This is the crucial connection
     if (gainNode && sourceNode) {
        sourceNode.connect(gainNode);
     }
@@ -405,6 +399,7 @@ export default function AudioProcessor({
       }
       sourceNode = null;
     }
+    // Disconnect all nodes in the chain to be safe
     gainNode?.disconnect();
     filterNode?.disconnect();
     pannerNode?.disconnect();
@@ -524,7 +519,6 @@ export default function AudioProcessor({
         offlineSource.buffer = decodedBuffer;
         
         const graph = await setupAudioGraph(offlineCtx);
-
 
         if(offlineCtx.listener.positionX) {
             offlineCtx.listener.positionX.value = 0;
