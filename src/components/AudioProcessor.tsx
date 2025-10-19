@@ -14,6 +14,8 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import AudioVisualizer, { VisualizationType } from './AudioVisualizer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { Progress } from '@/components/ui/progress';
+
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -48,6 +50,7 @@ export default function AudioProcessor({
 }: AudioProcessorProps) {
   const [isDecoding, setIsDecoding] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
   const [decodedBuffer, setDecodedBuffer] = useState<AudioBuffer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -497,7 +500,7 @@ export default function AudioProcessor({
     document.body.appendChild(a);
     a.click();
     URL.revokeObjectURL(url);
-a.remove();
+    a.remove();
 
      toast({
         title: 'Download Ready!',
@@ -516,6 +519,7 @@ a.remove();
     }
     
     setIsRendering(true);
+    setRenderProgress(0);
     const wasPlaying = isPlaying;
     stopPreview();
     toast({
@@ -561,59 +565,75 @@ a.remove();
             graphFilterNode?.frequency.setValueAtTime(freq, rampTime);
             graphGainNode?.gain.setValueAtTime(gain, rampTime);
         }
+        
+        offlineCtx.oncomplete = async (event) => {
+            const renderedBuffer = event.renderedBuffer;
+            if (fileType === 'video') {
+                const canvas = visualizerCanvasRef.current;
+                if (!canvas) throw new Error("Visualizer canvas not found");
+                
+                const renderAudioCtx = new AudioContext();
+                const renderedSource = renderAudioCtx.createBufferSource();
+                renderedSource.buffer = renderedBuffer;
+
+                const mediaStreamDestination = renderAudioCtx.createMediaStreamDestination();
+                renderedSource.connect(mediaStreamDestination);
+                
+                const videoStream = canvas.captureStream(60); 
+                const audioStream = mediaStreamDestination.stream;
+                
+                const combinedStream = new MediaStream([
+                    videoStream.getVideoTracks()[0],
+                    audioStream.getAudioTracks()[0],
+                ]);
+
+                const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+                const chunks: Blob[] = [];
+                
+                recorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        chunks.push(e.data);
+                    }
+                };
+
+                recorder.onstop = () => {
+                    const videoBlob = new Blob(chunks, { type: 'video/webm' });
+                    downloadFile(videoBlob, 'video');
+                    renderAudioCtx.close();
+                    videoStream.getTracks().forEach(track => track.stop());
+                    audioStream.getTracks().forEach(track => track.stop());
+                };
+                
+                renderedSource.onended = () => {
+                    setTimeout(() => {
+                        if (recorder.state === 'recording') {
+                            recorder.stop();
+                        }
+                    }, 500); 
+                };
+
+                recorder.start();
+                renderedSource.start();
+
+            } else {
+                const wavBlob = bufferToWav(renderedBuffer);
+                downloadFile(wavBlob, 'audio');
+            }
+            setIsRendering(false);
+            if (wasPlaying && decodedBuffer) {
+              playPreview();
+            }
+        };
+
+        const renderInterval = setInterval(() => {
+            setRenderProgress( (offlineCtx.currentTime / decodedBuffer.duration) * 100 );
+        }, 100);
 
         offlineSource.start(0);
-        const renderedBuffer = await offlineCtx.startRendering();
+        await offlineCtx.startRendering();
+        clearInterval(renderInterval);
+        setRenderProgress(100);
 
-        if (fileType === 'video') {
-            const canvas = visualizerCanvasRef.current;
-            if (!canvas) throw new Error("Visualizer canvas not found");
-            
-            const renderAudioCtx = new AudioContext();
-            const renderedSource = renderAudioCtx.createBufferSource();
-            renderedSource.buffer = renderedBuffer;
-
-            const mediaStreamDestination = renderAudioCtx.createMediaStreamDestination();
-            renderedSource.connect(mediaStreamDestination);
-            
-            const videoStream = canvas.captureStream(60); 
-            const audioStream = mediaStreamDestination.stream;
-            
-            const combinedStream = new MediaStream([
-                videoStream.getVideoTracks()[0],
-                audioStream.getAudioTracks()[0],
-            ]);
-
-            const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
-            const chunks: Blob[] = [];
-            
-            recorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    chunks.push(event.data);
-                }
-            };
-
-            recorder.onstop = () => {
-                const videoBlob = new Blob(chunks, { type: 'video/webm' });
-                downloadFile(videoBlob, 'video');
-                renderAudioCtx.close();
-                videoStream.getTracks().forEach(track => track.stop());
-                audioStream.getTracks().forEach(track => track.stop());
-            };
-            
-            renderedSource.onended = () => {
-                setTimeout(() => {
-                    recorder.stop();
-                }, 100);
-            };
-
-            recorder.start();
-            renderedSource.start();
-
-        } else {
-            const wavBlob = bufferToWav(renderedBuffer);
-            downloadFile(wavBlob, 'audio');
-        }
 
     } catch (e) {
         console.error('Offline rendering error:', e);
@@ -624,15 +644,11 @@ a.remove();
             description: `Could not render the ${fileType}.`,
             variant: 'destructive',
         });
-    } finally {
         setIsRendering(false);
-        if (wasPlaying && decodedBuffer) {
-          playPreview();
-        }
     }
   };
 
-  const isBusy = isDecoding || isRendering;
+  const isBusy = isDecoding; // isRendering is handled separately for progress bar
 
   const handleEffectChange = (value: EffectType) => {
       setEffectType(value);
@@ -655,9 +671,9 @@ a.remove();
           <div
             className={cn(
                 "relative flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-input bg-background/50 p-8 transition-colors hover:border-primary/50 hover:bg-primary/10",
-                isBusy && "cursor-not-allowed opacity-50"
+                (isBusy || isRendering) && "cursor-not-allowed opacity-50"
             )}
-            onClick={() => !isBusy && document.getElementById('audio-upload')?.click()}
+            onClick={() => !(isBusy || isRendering) && document.getElementById('audio-upload')?.click()}
           >
             <Input
               id="audio-upload"
@@ -665,9 +681,9 @@ a.remove();
               className="sr-only"
               accept="audio/*"
               onChange={handleFileChange}
-              disabled={isBusy}
+              disabled={isBusy || isRendering}
             />
-            {audioFile && !isBusy ? (
+            {audioFile && !(isBusy || isRendering) ? (
               <div className="flex flex-col items-center text-center">
                 <FileAudio className="mb-4 h-12 w-12 text-primary" />
                 <p className="font-semibold text-foreground">{audioFile.name}</p>
@@ -682,11 +698,11 @@ a.remove();
                 <p className="text-sm">Any standard audio format</p>
               </div>
             )}
-            {isBusy && (
+            {(isBusy || isRendering) && (
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
                   <RotateCw className="mb-4 h-12 w-12 animate-spin text-primary" />
-                  <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : "Rendering..."}</p>
-              </div>
+                  <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : `Rendering... (${Math.round(renderProgress)}%)`}</p>
+               </div>
             )}
           </div>
         </div>
@@ -698,12 +714,12 @@ a.remove();
                 <button
                   key={effect}
                   onClick={() => handleEffectChange(effect)}
-                  disabled={isBusy}
+                  disabled={isBusy || isRendering}
                   className={cn(
                     "rounded-md border-2 p-4 font-headline text-lg font-semibold transition-all",
                     "border-input bg-background/50 hover:border-primary/50 hover:bg-primary/10",
                     effectType === effect ? "border-primary/80 bg-primary/20 text-primary-foreground shadow-lg shadow-primary/10" : "text-muted-foreground",
-                    isBusy && "cursor-not-allowed opacity-50"
+                    (isBusy || isRendering) && "cursor-not-allowed opacity-50"
                   )}
                 >
                   {effect}
@@ -721,7 +737,7 @@ a.remove();
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 pt-2">
                  <div className="grid gap-2">
                     <Label htmlFor="movement-path-select">Movement Path</Label>
-                     <Select value={customMovement} onValueChange={(val: MovementPath) => setCustomMovement(val)} disabled={isBusy}>
+                     <Select value={customMovement} onValueChange={(val: MovementPath) => setCustomMovement(val)} disabled={isBusy || isRendering}>
                         <SelectTrigger id="movement-path-select">
                             <SelectValue placeholder="Select a path" />
                         </SelectTrigger>
@@ -739,7 +755,7 @@ a.remove();
                         min={1} max={15}
                         value={[customSpeed]}
                         onValueChange={(val) => setCustomSpeed(val[0])}
-                        disabled={isBusy}
+                        disabled={isBusy || isRendering}
                     />
                      <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Slow</span>
@@ -753,7 +769,7 @@ a.remove();
                         min={1} max={10}
                         value={[customWidth]}
                         onValueChange={(val) => setCustomWidth(val[0])}
-                        disabled={isBusy}
+                        disabled={isBusy || isRendering}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Narrow</span>
@@ -767,7 +783,7 @@ a.remove();
                         min={0} max={1} step={0.05}
                         value={[customReverb]}
                         onValueChange={(val) => setCustomReverb(val[0])}
-                        disabled={isBusy}
+                        disabled={isBusy || isRendering}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Dry</span>
@@ -781,7 +797,7 @@ a.remove();
                         min={-10} max={10} step={1}
                         value={[customBass]}
                         onValueChange={(val) => setCustomBass(val[0])}
-                        disabled={isBusy}
+                        disabled={isBusy || isRendering}
                     />
                      <div className="flex justify-between text-xs text-muted-foreground">
                         <span>-10dB</span>
@@ -795,7 +811,7 @@ a.remove();
                         min={-10} max={10} step={1}
                         value={[customMid]}
                         onValueChange={(val) => setCustomMid(val[0])}
-                        disabled={isBusy}
+                        disabled={isBusy || isRendering}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>-10dB</span>
@@ -808,7 +824,7 @@ a.remove();
                         min={-10} max={10} step={1}
                         value={[customTreble]}
                         onValueChange={(val) => setCustomTreble(val[0])}
-                        disabled={isBusy}
+                        disabled={isBusy || isRendering}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>-10dB</span>
@@ -823,7 +839,7 @@ a.remove();
           <div className="pt-4 space-y-4">
             <div className="grid gap-2">
                 <Label htmlFor="viz-select">3. Select Visualization</Label>
-                <Select value={visualizationType} onValueChange={(val: VisualizationType) => setVisualizationType(val)} disabled={isBusy}>
+                <Select value={visualizationType} onValueChange={(val: VisualizationType) => setVisualizationType(val)} disabled={isBusy || isRendering}>
                     <SelectTrigger id="viz-select" className="w-full md:w-[240px]">
                         <SelectValue placeholder="Select a visualization" />
                     </SelectTrigger>
@@ -857,20 +873,25 @@ a.remove();
 
       </CardContent>
       <CardFooter className="flex flex-col sm:flex-row gap-4">
-        <Button onClick={togglePreview} disabled={!decodedBuffer || isBusy} className="w-full sm:w-auto" variant="outline">
+        <Button onClick={togglePreview} disabled={!decodedBuffer || isBusy || isRendering} className="w-full sm:w-auto" variant="outline">
           {isPlaying ? <Pause className="mr-2 h-4 w-4 text-primary" /> : <Play className="mr-2 h-4 w-4 text-primary" />}
           {isPlaying ? 'Pause Preview' : 'Play Preview'}
         </Button>
         
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button disabled={!decodedBuffer || isBusy} className="w-full sm:w-auto">
-                    {isRendering ? (
-                        <RotateCw className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                        <Download className="mr-2 h-4 w-4" />
+                <Button disabled={!decodedBuffer || isBusy || isRendering} className="relative w-full sm:w-auto overflow-hidden">
+                    {isRendering && (
+                        <Progress value={renderProgress} className="absolute inset-0 w-full h-full" />
                     )}
-                    Download
+                    <div className="relative flex items-center">
+                        {isRendering ? (
+                            <RotateCw className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Download className="mr-2 h-4 w-4" />
+                        )}
+                        {isRendering ? `Rendering... (${Math.round(renderProgress)}%)` : 'Download'}
+                    </div>
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -885,7 +906,7 @@ a.remove();
             </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button onClick={() => handleReset()} variant="ghost" className="w-full sm:w-auto sm:ml-auto" disabled={isBusy}>
+        <Button onClick={() => handleReset()} variant="ghost" className="w-full sm:w-auto sm:ml-auto" disabled={isBusy || isRendering}>
             Reset
         </Button>
       </CardFooter>
