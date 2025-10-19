@@ -771,8 +771,8 @@ export default function AudioProcessor({
                       disabled={isBusy || isRendering}
                       className={cn(
                           "rounded-md border p-4 text-lg font-semibold transition-all duration-200",
-                          "border-input bg-background/50 hover:border-primary/50 hover:bg-primary/10",
-                          effectType === effect ? "border-primary bg-primary/20 text-primary-foreground shadow-lg shadow-primary/10 ring-2 ring-primary" : "text-muted-foreground",
+                          "border-input bg-background/50 hover:bg-accent/80 hover:text-accent-foreground",
+                          effectType === effect ? "bg-accent text-accent-foreground border-accent-foreground/20 ring-2 ring-accent" : "text-muted-foreground",
                           (isBusy || isRendering) && "cursor-not-allowed opacity-50"
                       )}
                       >
