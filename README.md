@@ -1,13 +1,15 @@
 # Sonic Weaver
 
-Sonic Weaver is a web application that allows you to transform standard audio files into immersive spatial audio experiences. Using the power of the Web Audio API, you can apply 4D, 8D, and 11D effects, or create your own custom soundscapes in real-time.
+Sonic Weaver is a web application that allows you to transform standard audio files into immersive spatial audio experiences. Using the power of the Web Audio API, you can apply 4D, 8D, and 11D effects, create your own custom soundscapes, or use an intelligent reactive mode in real-time.
 
 ## Features
 
 *   **Spatial Audio Processor**: Upload any audio track and apply unique spatial effects.
-*   **Multiple Effect Types**: Choose from presets like **4D (Wide Arc)**, **8D (Circle)**, and **11D (Figure-8)**.
+*   **Multiple Effect Types**: Choose from presets like **4D (Wide Arc)**, **8D (Circle)**, **11D (Figure-8)**, and the dynamic **Reactive** mode.
+*   **Reactive Mode**: An intelligent effect where the audio's volume and tone dynamically pulse and shift with the beat of your music.
 *   **Custom Mode**: Fine-tune the audio with controls for movement path, speed, width, reverb, and a 3-band EQ.
 *   **Real-time Preview**: Listen to the changes as you make them with a looping preview.
+*   **Generative Visualizers**: Experience your music through a suite of dynamic, generative art visualizers that react to the sound.
 *   **Download Processed Audio**: Render and download your creation as a high-quality `.wav` file.
 *   **Interactive Demo**: Instantly toggle between original mono audio and the processed 11D effect to hear the difference.
 *   **Spatial Sound Game**: Test your ears with a fun game where you have to pinpoint the location of a sound.

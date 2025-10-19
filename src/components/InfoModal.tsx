@@ -72,6 +72,16 @@ export function InfoModal({ children }: { children: React.ReactNode }) {
               it's further away or behind you, creating a highly realistic and
               dynamic sense of space.
             </p>
+             <p>
+              <strong>Reactive</strong>
+              <br />
+              This intelligent effect combines the stable, smooth movement of the
+              Figure-8 path with a dynamic, responsive feel. The sound's volume and tonal
+              brightness will automatically swell and recede based on the music's
+              bass and treble frequencies. This makes the audio "breathe" in time
+              with the track, creating an immersive, pulsating experience without
+              erratic movement.
+            </p>
             <p>
               <strong>Custom</strong>
               <br />
