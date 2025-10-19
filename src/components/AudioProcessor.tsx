@@ -828,8 +828,7 @@ export default function AudioProcessor({
                               />
                           </div>
                           <div className="grid gap-2">
-                              <Label htmlFor="treble-slider" className="text-sm">Treble ({customTreble}dB)</Label>
-                              <Slider
+                              <Label htmlFor="treble-slider" className="text-sm">Treble ({customTreble}dB)</Label>                              <Slider
                                   id="treble-slider"
                                   min={-10} max={10} step={1}
                                   value={[customTreble]}
