@@ -1,8 +1,14 @@
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
-import SonicWeaverApp from '@/components/SonicWeaverApp';
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import dynamic from 'next/dynamic';
+
+const SonicWeaverApp = dynamic(() => import('@/components/SonicWeaverApp'), {
+  ssr: false,
+  loading: () => <div className="flex-1 flex items-center justify-center"><p>Loading App...</p></div>
+});
+
 
 export default function AppPage() {
   const heroImage = PlaceHolderImages.find(p => p.id === 'hero-background');
