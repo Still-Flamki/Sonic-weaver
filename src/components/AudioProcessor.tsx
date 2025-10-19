@@ -306,8 +306,6 @@ export default function AudioProcessor({
         lastNodeInChain.connect(dryNode);
         lastNodeInChain.connect(wetNode);
 
-        wetNode.connect(convolverNode);
-
         if (filterNode && pannerNode) {
           dryNode.connect(filterNode);
           convolverNode.connect(pannerNode);
@@ -625,9 +623,12 @@ export default function AudioProcessor({
             }
         }
         
-        offlineCtx.onstatechange = () => {
-            setRenderProgress((offlineCtx.currentTime / decodedBuffer.duration) * 100);
-        }
+        offlineCtx.onstatechange = (event) => {
+            if (event.state === 'running') {
+              const progress = (offlineCtx.currentTime / decodedBuffer.duration) * 100;
+              setRenderProgress(progress);
+            }
+        };
 
         const renderedBuffer = await offlineCtx.startRendering();
         setRenderProgress(100);
@@ -648,7 +649,7 @@ export default function AudioProcessor({
             });
 
             await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
-            await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'copy', 'output.mp4']);
+            await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'libx264', 'output.mp4']);
             
             const data = await ffmpeg.readFile('output.mp4');
             const mp4Blob = new Blob([data], { type: 'video/mp4' });
