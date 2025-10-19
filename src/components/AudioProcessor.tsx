@@ -61,7 +61,7 @@ export default function AudioProcessor({
   const [customMid, setCustomMid] = useState(0);
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
-  const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
+  const [visualizationType, setVisualizationType] = useState<VisualizationType>('orb');
 
 
   const { toast } = useToast();
