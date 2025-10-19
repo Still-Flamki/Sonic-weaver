@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import AudioVisualizer, { VisualizationType } from './AudioVisualizer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 
 interface AudioProcessorProps {
@@ -51,6 +53,7 @@ export default function AudioProcessor({
   const [isDecoding, setIsDecoding] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
+  const [renderMessage, setRenderMessage] = useState('Rendering...');
   const [decodedBuffer, setDecodedBuffer] = useState<AudioBuffer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +68,8 @@ export default function AudioProcessor({
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
   const [visualizationType, setVisualizationType] = useState<VisualizationType>('orb');
+
+  const ffmpegRef = useRef(new FFmpeg());
 
 
   const { toast } = useToast();
@@ -495,7 +500,7 @@ export default function AudioProcessor({
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
-    const extension = fileType === 'audio' ? 'wav' : 'webm';
+    const extension = fileType === 'audio' ? 'wav' : 'mp4';
     a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.${extension}`;
     document.body.appendChild(a);
     a.click();
@@ -509,7 +514,7 @@ export default function AudioProcessor({
   }
 
   const renderVideo = (renderedBuffer: AudioBuffer) => {
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<Blob>((resolve, reject) => {
         const canvas = visualizerCanvasRef.current;
         if (!canvas) {
             reject(new Error("Visualizer canvas not found"));
@@ -523,7 +528,7 @@ export default function AudioProcessor({
         const mediaStreamDestination = renderAudioCtx.createMediaStreamDestination();
         renderedSource.connect(mediaStreamDestination);
         
-        const videoStream = canvas.captureStream(60); 
+        const videoStream = canvas.captureStream(30); 
         const audioStream = mediaStreamDestination.stream;
         
         const combinedStream = new MediaStream([
@@ -542,15 +547,13 @@ export default function AudioProcessor({
 
         recorder.onstop = () => {
             const videoBlob = new Blob(chunks, { type: 'video/webm' });
-            downloadFile(videoBlob, 'video');
             renderAudioCtx.close();
             videoStream.getTracks().forEach(track => track.stop());
             audioStream.getTracks().forEach(track => track.stop());
-            resolve();
+            resolve(videoBlob);
         };
-
+        
         renderedSource.onended = () => {
-            // Add a small delay to ensure the last frames are captured
             setTimeout(() => {
                 if (recorder.state === 'recording') {
                     recorder.stop();
@@ -561,7 +564,7 @@ export default function AudioProcessor({
         recorder.start();
         renderedSource.start();
     });
-};
+  };
 
   const handleDownload = async (fileType: 'audio' | 'video') => {
     if (!decodedBuffer) {
@@ -575,11 +578,12 @@ export default function AudioProcessor({
     
     setIsRendering(true);
     setRenderProgress(0);
+    setRenderMessage('Rendering audio...');
     const wasPlaying = isPlaying;
     stopPreview();
     toast({
         title: `Rendering ${fileType}...`,
-        description: 'Preparing your file for download. This may take a moment.',
+        description: 'This may take a moment, especially for video.',
     });
 
     try {
@@ -605,65 +609,79 @@ export default function AudioProcessor({
             offlineSource.connect(gainNode);
         }
         
-        // Manual animation for offline rendering
         const graphPannerNode = pannerNode;
         const graphFilterNode = filterNode;
         const graphGainNode = gainNode;
 
         if (graphPannerNode && graphFilterNode && graphGainNode) {
-            const timeStep = 1 / 120; // Increase precision for smoother offline render
+            const timeStep = 1 / 120;
             for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
                 const { x, y, z, gain, freq } = getAnimationPath(time);
-                const rampTime = time;
-                graphPannerNode.positionX.setValueAtTime(x, rampTime);
-                graphPannerNode.positionY.setValueAtTime(y, rampTime);
-                graphPannerNode.positionZ.setValueAtTime(z, rampTime);
-                graphFilterNode.frequency.setValueAtTime(freq, rampTime);
-                graphGainNode.gain.setValueAtTime(gain, rampTime);
+                graphPannerNode.positionX.setValueAtTime(x, time);
+                graphPannerNode.positionY.setValueAtTime(y, time);
+                graphPannerNode.positionZ.setValueAtTime(z, time);
+                graphFilterNode.frequency.setValueAtTime(freq, time);
+                graphGainNode.gain.setValueAtTime(gain, time);
             }
         }
         
-        const renderInterval = setInterval(() => {
-            setRenderProgress( (offlineCtx.currentTime / decodedBuffer.duration) * 100 );
-        }, 100);
-        
-        offlineSource.start(0);
+        offlineCtx.onstatechange = () => {
+            setRenderProgress((offlineCtx.currentTime / decodedBuffer.duration) * 100);
+        }
 
         const renderedBuffer = await offlineCtx.startRendering();
-        
-        clearInterval(renderInterval);
         setRenderProgress(100);
 
         if (fileType === 'video') {
-            await renderVideo(renderedBuffer);
+            setRenderMessage('Capturing video...');
+            const webmBlob = await renderVideo(renderedBuffer);
+
+            setRenderMessage('Converting to MP4...');
+            const ffmpeg = ffmpegRef.current;
+            await ffmpeg.load({
+              coreURL: await toBlobURL('/ffmpeg/ffmpeg-core.js', 'text/javascript'),
+              wasmURL: await toBlobURL('/ffmpeg/ffmpeg-core.wasm', 'application/wasm'),
+            });
+            
+            ffmpeg.on('progress', ({ progress }) => {
+              setRenderProgress(progress * 100);
+            });
+
+            await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
+            await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'copy', 'output.mp4']);
+            
+            const data = await ffmpeg.readFile('output.mp4');
+            const mp4Blob = new Blob([data], { type: 'video/mp4' });
+            downloadFile(mp4Blob, 'video');
+
         } else {
             const wavBlob = bufferToWav(renderedBuffer);
             downloadFile(wavBlob, 'audio');
         }
 
     } catch (e) {
-        console.error('Offline rendering error:', e);
+        console.error('Download/Render error:', e);
         const message = e instanceof Error ? e.message : 'Could not render the file.';
-        setError(`Failed to render the ${fileType}. ${message}`);
+        setError(`Failed to process the ${fileType}. ${message}`);
         toast({
             title: 'Download Failed',
-            description: `Could not render the ${fileType}.`,
+            description: `Could not process the ${fileType}. See console for details.`,
             variant: 'destructive',
         });
     } finally {
         setIsRendering(false);
+        setRenderProgress(0);
         if (wasPlaying && decodedBuffer) {
           playPreview();
         }
     }
   };
 
-  const isBusy = isDecoding; // isRendering is handled separately for progress bar
+  const isBusy = isDecoding;
 
   const handleEffectChange = (value: EffectType) => {
       setEffectType(value);
       if (isPlaying) {
-        // Effect change during playback, re-initialize animation
         stopPreview();
         setTimeout(() => playPreview(), 50);
       }
@@ -711,7 +729,8 @@ export default function AudioProcessor({
             {(isBusy || isRendering) && (
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
                   <RotateCw className="mb-4 h-12 w-12 animate-spin text-primary" />
-                  <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : `Rendering...`}</p>
+                  <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : `${renderMessage}`}</p>
+                   {isRendering && <Progress value={renderProgress} className="w-48 mt-4 h-2" />}
                </div>
             )}
           </div>
@@ -900,7 +919,7 @@ export default function AudioProcessor({
                         ) : (
                             <Download className="mr-2 h-4 w-4" />
                         )}
-                        {isRendering ? `Rendering... (${Math.round(renderProgress)}%)` : 'Download'}
+                        {isRendering ? `${renderMessage} (${Math.round(renderProgress)}%)` : 'Download'}
                     </div>
                 </Button>
             </DropdownMenuTrigger>
@@ -911,7 +930,7 @@ export default function AudioProcessor({
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleDownload('video')}>
                     <Video className="mr-2 h-4 w-4" />
-                    <span>Video (.webm)</span>
+                    <span>Video (.mp4)</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
@@ -923,5 +942,3 @@ export default function AudioProcessor({
     </Card>
   );
 }
-
-    
