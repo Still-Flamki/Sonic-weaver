@@ -19,10 +19,11 @@ interface AudioProcessorProps {
   setAudioFile: Dispatch<SetStateAction<File | null>>;
 }
 
-// Web Audio API context
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
 let pannerNode: PannerNode | null = null;
+let filterNode: BiquadFilterNode | null = null;
+let gainNode: GainNode | null = null;
 
 export default function AudioProcessor({
   effectType,
@@ -38,7 +39,6 @@ export default function AudioProcessor({
   
   const { toast } = useToast();
 
-  // Initialize AudioContext
   useEffect(() => {
     if (!audioContext) {
       try {
@@ -48,17 +48,8 @@ export default function AudioProcessor({
         console.error(e);
       }
     }
-    // Cleanup on unmount
     return () => {
       stopPreview();
-      if (sourceNode) {
-        sourceNode.disconnect();
-        sourceNode = null;
-      }
-      if (pannerNode) {
-        pannerNode.disconnect();
-        pannerNode = null;
-      }
     };
   }, []);
 
@@ -101,11 +92,11 @@ export default function AudioProcessor({
       setProcessedBuffer(decodedBuffer);
       toast({
         title: 'Processing Complete!',
-        description: `Your ${effectType} audio is ready to be previewed.`,
+        description: `Your ${effectType} audio is ready for preview.`,
       });
     } catch (e) {
       console.error('Audio processing error:', e);
-      setError('Failed to decode or process the audio file. It might be corrupted or in an unsupported format.');
+      setError('Failed to decode the audio file. It might be corrupted or in an unsupported format.');
       toast({
         title: 'Processing Failed',
         description: 'Could not process the audio file.',
@@ -117,52 +108,66 @@ export default function AudioProcessor({
   };
 
   const startSpatialAnimation = () => {
-    if (!audioContext || !pannerNode) return;
+    if (!audioContext || !pannerNode || !filterNode || !gainNode) return;
+  
+    const p = pannerNode;
+    const f = filterNode;
+    const g = gainNode;
+    const radius = 3;
 
     let duration: number;
-    let path: (time: number) => { x: number; z: number };
+    let path: (time: number) => { x: number; y: number; z: number };
 
     switch (effectType) {
       case '4D':
-        duration = 6; // Slower back and forth
+        duration = 4; // Simple, slower side-to-side
         path = (time) => {
-          const angle = (time / duration) * Math.PI; // Just one half of the circle
-          return { x: Math.cos(angle) * 3, z: 0 };
+          const angle = (time / duration) * Math.PI;
+          return { x: Math.cos(angle) * radius, y: 0, z: -1 };
         };
         break;
       case '8D':
-        duration = 8; // Full circle
+        duration = 8; // Classic circular path
         path = (time) => {
           const angle = (time / duration) * 2 * Math.PI;
-          return { x: Math.cos(angle) * 3, z: Math.sin(angle) * 3 };
+          return { x: Math.cos(angle) * radius, y: 0, z: Math.sin(angle) * radius };
         };
         break;
       case '11D':
-        duration = 6; // Faster and more complex
+        duration = 6; // Complex figure-eight with vertical movement
         path = (time) => {
-          // Figure-eight path
           const angle = (time / duration) * 2 * Math.PI;
-          return { x: Math.sin(angle) * 3, z: Math.sin(angle) * Math.cos(angle) * 3 };
+          return { x: Math.sin(angle) * radius, y: Math.cos(angle * 2) * 1.5, z: Math.sin(angle) * Math.cos(angle) * radius };
         };
         break;
       default:
-        duration = 8;
-        path = (time) => ({ x: 0, z: 0 });
+        return;
     }
 
     const startTime = audioContext.currentTime;
 
     const animate = () => {
-      if (!pannerNode || !audioContext) return;
+      if (!audioContext || !p.positionX || !f.frequency || !g.gain) {
+        animationFrameRef.current = undefined;
+        return;
+      };
+
       const time = audioContext.currentTime - startTime;
-      const { x, z } = path(time);
+      const { x, y, z } = path(time);
       
-      if (pannerNode.positionX.setValueAtTime) {
-        pannerNode.positionX.setValueAtTime(x, audioContext.currentTime);
-        pannerNode.positionZ.setValueAtTime(z, audioContext.currentTime);
-      } else {
-        (pannerNode as any).setPosition(x, 0, z);
-      }
+      p.positionX.linearRampToValueAtTime(x, audioContext.currentTime + 0.05);
+      p.positionY.linearRampToValueAtTime(y, audioContext.currentTime + 0.05);
+      p.positionZ.linearRampToValueAtTime(z, audioContext.currentTime + 0.05);
+      
+      // Psychoacoustic effect: muffle high frequencies when sound is "behind" the listener
+      const freq = 5000 + (z + radius) / (2 * radius) * 10000;
+      f.frequency.linearRampToValueAtTime(freq, audioContext.currentTime + 0.05);
+
+      // Psychoacoustic effect: slightly reduce gain when sound is further away
+      const distance = Math.sqrt(x*x + y*y + z*z);
+      const newGain = 1 - (distance / (radius * 2));
+      g.gain.linearRampToValueAtTime(Math.max(0.7, newGain), audioContext.currentTime + 0.05);
+
 
       animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -172,22 +177,24 @@ export default function AudioProcessor({
   const playPreview = () => {
     if (!processedBuffer || !audioContext) return;
     
-    stopPreview(); // Stop any existing playback first
+    stopPreview();
+
+    audioContext.resume();
 
     sourceNode = audioContext.createBufferSource();
     sourceNode.buffer = processedBuffer;
+    sourceNode.loop = true;
 
     pannerNode = audioContext.createPanner();
     pannerNode.panningModel = 'HRTF';
     pannerNode.distanceModel = 'inverse';
-    pannerNode.refDistance = 1;
-    pannerNode.maxDistance = 10000;
-    pannerNode.rolloffFactor = 1;
-    pannerNode.coneInnerAngle = 360;
-    pannerNode.coneOuterAngle = 0;
-    pannerNode.coneOuterGain = 0;
     
-    // Position the listener
+    filterNode = audioContext.createBiquadFilter();
+    filterNode.type = 'lowpass';
+    filterNode.Q.value = 1;
+
+    gainNode = audioContext.createGain();
+
     if(audioContext.listener.positionX) {
       audioContext.listener.positionX.value = 0;
       audioContext.listener.positionY.value = 0;
@@ -196,15 +203,13 @@ export default function AudioProcessor({
        audioContext.listener.setPosition(0,0,0);
     }
     
-
-    sourceNode.connect(pannerNode);
+    sourceNode.connect(gainNode);
+    gainNode.connect(filterNode);
+    filterNode.connect(pannerNode);
     pannerNode.connect(audioContext.destination);
-
+    
     sourceNode.onended = () => {
-      setIsPlaying(false);
-      if(animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      stopPreview();
     };
     
     sourceNode.start(0);
@@ -213,19 +218,19 @@ export default function AudioProcessor({
   };
 
   const stopPreview = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = undefined;
+    }
     if (sourceNode) {
       sourceNode.stop(0);
       sourceNode.disconnect();
       sourceNode = null;
     }
-    if (pannerNode) {
-      pannerNode.disconnect();
-      pannerNode = null;
-    }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = undefined;
-    }
+    if (gainNode) gainNode.disconnect();
+    if (filterNode) filterNode.disconnect();
+    if (pannerNode) pannerNode.disconnect();
+    
     setIsPlaying(false);
   };
 
@@ -297,7 +302,12 @@ export default function AudioProcessor({
           <Label>2. Select Effect Type</Label>
           <RadioGroup
             value={effectType}
-            onValueChange={(value: EffectType) => setEffectType(value)}
+            onValueChange={(value: EffectType) => {
+              setEffectType(value);
+              if (isPlaying) { // Re-start animation if playing
+                playPreview();
+              }
+            }}
             className="grid grid-cols-3 gap-4"
             disabled={isProcessing}
           >
@@ -320,7 +330,7 @@ export default function AudioProcessor({
             <Terminal className="h-4 w-4" />
             <AlertTitle>Decoding Audio</AlertTitle>
             <AlertDescription>
-              Preparing your audio file for processing. This should be quick...
+              Preparing your audio file. This should be quick...
             </AlertDescription>
           </Alert>
         )}
