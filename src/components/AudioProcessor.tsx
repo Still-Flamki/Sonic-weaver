@@ -196,20 +196,21 @@ export default function AudioProcessor({
 
     if (currentEffect === 'Reactive' && freqDataRef.current && analyserNode) {
         analyserNode.getByteFrequencyData(freqDataRef.current);
-        const bass = freqDataRef.current.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255; // 0-86Hz
-        const mid = freqDataRef.current.slice(20, 40).reduce((s, v) => s + v, 0) / 20 / 255; // ~500-1k
-        const treble = freqDataRef.current.slice(60, 100).reduce((s,v)=> s+v, 0) / 40 / 255; // ~2.5-4.3k
+        const bass = freqDataRef.current.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
+        const mid = freqDataRef.current.slice(20, 40).reduce((s, v) => s + v, 0) / 20 / 255;
+        const treble = freqDataRef.current.slice(60, 100).reduce((s,v)=> s+v, 0) / 40 / 255;
 
-        const reactiveRadius = 2 + Math.pow(bass, 2) * 8; // Width swells with bass
-        const reactiveSpeed = 12 - mid * 8; // Speed increases with mid-range energy
+        // Enhanced reactivity
+        const reactiveRadius = 1.5 + Math.pow(bass, 1.5) * 12; // More sensitive to bass, wider range
+        const reactiveSpeed = 10 - Math.pow(mid, 2) * 9; // Speed more dramatically affected by mids
         
         const x = reactiveRadius * Math.sin((2 * Math.PI / reactiveSpeed) * time);
         const z = reactiveRadius * Math.cos((2 * Math.PI / reactiveSpeed) * time);
-        const y = (treble * 2 - 1) * 2; // Vertical position driven by treble
+        const y = (treble * 2 - 1) * 3; // More vertical movement with treble
 
         path = { x, y, z };
-        gain = 0.8;
-        freq = 22050;
+        gain = 0.7 + bass * 0.2; // Pulsating gain effect
+        freq = 5000 + treble * 15000; // Filter opens up with high frequencies
     } else {
       switch (currentEffect) {
         case '4D':
