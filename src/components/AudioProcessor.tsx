@@ -181,7 +181,10 @@ export default function AudioProcessor({
     
     const distance = Math.sqrt(path.x*path.x + path.y*path.y + path.z*path.z);
     const normalizedDistance = Math.min(distance / maxDistance, 1);
-    const gain = Math.cos(normalizedDistance * Math.PI / 2); // Smoother falloff
+    
+    // Adjusted gain: starts at 1, dips to 0.5, and is never silent.
+    const gain = 1 - (normalizedDistance * 0.5);
+
     const freq = path.z > 0 ? 3000 + (path.z / zRadius) * 2000 : 5000 - (Math.abs(path.z) / zRadius) * 2000;
 
     return { ...path, gain, freq };
