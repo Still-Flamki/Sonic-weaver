@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, Ear, Gamepad2, SlidersHorizontal } from 'lucide-react';
+import { ArrowRight, Ear, Gamepad2, Info, SlidersHorizontal } from 'lucide-react';
 import AudioDemo from '@/components/AudioDemo';
 import { Badge } from '@/components/ui/badge';
 import AudioGame from '@/components/AudioGame';
@@ -79,8 +79,8 @@ export default function Home() {
             <AudioGame />
           </section>
 
-          <section className="container mx-auto px-4 md:px-6 py-20">
-            <div className="grid md:grid-cols-2 gap-12 items-center">
+          <section className="container mx-auto px-4 md:px-6 py-20 text-center">
+            <div className="max-w-3xl mx-auto">
                 <div className="space-y-4">
                     <h3 className="text-3xl md:text-4xl font-bold font-headline tracking-tight text-foreground">
                         Your Audio, Your Space
@@ -88,12 +88,12 @@ export default function Home() {
                     <p className="text-lg text-muted-foreground">
                         Upload any audio file and apply our unique spatial effects. Choose from presets like 4D, 8D, and 11D, or dive deep with the 'Custom' mode to create your own signature sound.
                     </p>
-                    <ul className="space-y-2 text-muted-foreground">
-                        <li className="flex items-center gap-2"><ArrowRight className="h-4 w-4 text-primary" /> Fine-tune movement, speed, and width.</li>
-                        <li className="flex items-center gap-2"><ArrowRight className="h-4 w-4 text-primary" /> Adjust a 3-band EQ for tonal balance.</li>
-                         <li className="flex items-center gap-2"><ArrowRight className="h-4 w-4 text-primary" /> Control the amount of lush reverb.</li>
+                    <ul className="inline-grid sm:grid-cols-3 gap-x-8 gap-y-2 text-muted-foreground">
+                        <li className="flex items-center gap-2"><ArrowRight className="h-4 w-4 text-primary" /> Fine-tune movement</li>
+                        <li className="flex items-center gap-2"><ArrowRight className="h-4 w-4 text-primary" /> Adjust a 3-band EQ</li>
+                         <li className="flex items-center gap-2"><ArrowRight className="h-4 w-4 text-primary" /> Control lush reverb</li>
                     </ul>
-                     <div className="pt-4">
+                     <div className="pt-6">
                         <Button asChild size="lg" className="group">
                             <Link href="/app">
                             Start Creating
@@ -102,8 +102,11 @@ export default function Home() {
                         </Button>
                     </div>
                 </div>
-                 <div className="space-y-4 rounded-lg bg-card/20 p-8 border border-primary/20 backdrop-blur-sm">
-                    <h4 className="font-headline text-xl font-bold text-foreground">Pro-Tip: Genre Presets</h4>
+                 <div className="mt-12 space-y-4 rounded-lg bg-card/20 p-8 border border-accent/20 backdrop-blur-sm max-w-xl mx-auto">
+                    <div className='flex items-center justify-center gap-3'>
+                      <Info className="h-6 w-6 text-accent" />
+                      <h4 className="font-headline text-xl font-bold text-foreground">Pro-Tip: Genre Presets</h4>
+                    </div>
                     <p className="text-muted-foreground">
                         Check out the info tab in the header for custom preset suggestions tailored for genres like Hip Hop, Rock, Classical, and Electronic music to get the perfect starting point for your track.
                     </p>
