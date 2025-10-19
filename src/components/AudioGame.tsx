@@ -180,7 +180,6 @@ export default function AudioGame() {
                                     disabled={gameState !== 'guessing'}
                                     className={cn(
                                         "absolute w-32 h-16 transition-all duration-300",
-                                        "transform -translate-x-1/2 -translate-y-1/2",
                                         isCorrect && "bg-green-500/80 border-green-400 text-white",
                                         isIncorrect && "bg-destructive/80 border-destructive-foreground/50 text-white"
                                     )}
