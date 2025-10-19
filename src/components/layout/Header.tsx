@@ -2,7 +2,6 @@ import { Info, Music4 } from 'lucide-react';
 import Link from 'next/link';
 import { InfoModal } from '../InfoModal';
 import { Button } from '../ui/button';
-import { ThemeSwitcher } from '../ThemeSwitcher';
 import { Separator } from '../ui/separator';
 
 export function Header() {
@@ -19,7 +18,6 @@ export function Header() {
             </h1>
           </Link>
           <div className="flex items-center justify-end gap-2 flex-wrap">
-              <ThemeSwitcher />
               <InfoModal>
                  <Button variant="outline" size="icon">
                       <Info className="h-5 w-5" />
