@@ -35,7 +35,7 @@ export default function Home() {
                 width={1200}
                 height={900}
                 data-ai-hint={headphonesImage.imageHint}
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none w-auto h-[150%] opacity-5"
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none w-auto h-[200%] opacity-5"
               />
             )}
             <div className="relative z-10 max-w-4xl mx-auto">
