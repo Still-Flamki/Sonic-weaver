@@ -33,7 +33,7 @@ export function ThemeSwitcher() {
     <TooltipProvider delayDuration={0}>
       <div className="flex items-center gap-2">
         {themes.map((t) => {
-           const isActive = resolvedTheme === t.value;
+           const isActive = theme === t.value || resolvedTheme === t.value;
           return (
           <Tooltip key={t.value}>
             <TooltipTrigger asChild>
@@ -44,11 +44,7 @@ export function ThemeSwitcher() {
                   isActive ? 'scale-110 border-primary' : 'border-transparent'
                 )}
                 style={{
-                  '--theme-bg': `var(--${t.value}-bg, hsl(var(--background)))`,
-                  '--theme-fg': `var(--${t.value}-fg, hsl(var(--foreground)))`,
-                  '--theme-primary': `var(--${t.value}-primary, hsl(var(--primary)))`,
                   background: `hsl(var(--${t.value === 'dark' || t.value === 'light' ? 'background' : t.value + '-bg'}))`,
-                  borderColor: isActive ? `hsl(var(--${t.value === 'dark' || t.value === 'light' ? 'primary' : t.value + '-primary'}))` : 'transparent'
                 }}
                 aria-label={`Switch to ${t.name} theme`}
               >
