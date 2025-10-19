@@ -12,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import AudioVisualizer from './AudioVisualizer';
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -35,6 +36,7 @@ let wetNode: GainNode | null = null;
 let lowShelfFilter: BiquadFilterNode | null = null;
 let midPeakingFilter: BiquadFilterNode | null = null;
 let highShelfFilter: BiquadFilterNode | null = null;
+let analyserNode: AnalyserNode | null = null;
 
 
 export default function AudioProcessor({
@@ -67,12 +69,15 @@ export default function AudioProcessor({
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         // Set up a mastering compressor at the end of the chain
         compressorNode = audioContext.createDynamicsCompressor();
-        compressorNode.threshold.value = -18; // Give more headroom before compressing
-        compressorNode.knee.value = 20;      // Softer knee
-        compressorNode.ratio.value = 8;     // Less aggressive ratio
-        compressorNode.attack.value = 0.005; // Slightly slower attack
-        compressorNode.release.value = 0.25;  // Medium release
+        compressorNode.threshold.value = -18; 
+        compressorNode.knee.value = 20;      
+        compressorNode.ratio.value = 8;     
+        compressorNode.attack.value = 0.005; 
+        compressorNode.release.value = 0.25;  
         compressorNode.connect(audioContext.destination);
+
+        analyserNode = audioContext.createAnalyser();
+        analyserNode.fftSize = 256;
       } catch (e) {
         setError('Web Audio API is not supported in this browser.');
         console.error(e);
@@ -301,18 +306,16 @@ export default function AudioProcessor({
         lastNodeInChain.connect(filterNode);
         filterNode.connect(pannerNode);
     }
-    
-    if (context instanceof OfflineAudioContext) {
-      const offlineCompressor = context.createDynamicsCompressor();
-      offlineCompressor.threshold.value = -18;
-      offlineCompressor.knee.value = 20;
-      offlineCompressor.ratio.value = 8;
-      offlineCompressor.attack.value = 0.005;
-      offlineCompressor.release.value = 0.25;
-      if (pannerNode) pannerNode.connect(offlineCompressor);
-      offlineCompressor.connect(context.destination);
-    } else if (compressorNode && pannerNode) {
-        pannerNode.connect(compressorNode);
+
+    const finalOutputNode = context instanceof OfflineAudioContext ? context.destination : compressorNode;
+
+    if(pannerNode && finalOutputNode) {
+        if(analyserNode && context instanceof AudioContext) {
+            pannerNode.connect(analyserNode);
+            analyserNode.connect(finalOutputNode);
+        } else {
+             pannerNode.connect(finalOutputNode);
+        }
     }
 };
 
@@ -402,6 +405,7 @@ export default function AudioProcessor({
     lowShelfFilter?.disconnect();
     midPeakingFilter?.disconnect();
     highShelfFilter?.disconnect();
+    analyserNode?.disconnect();
     
     setIsPlaying(false);
   };
@@ -552,7 +556,7 @@ export default function AudioProcessor({
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(url);
-        a.remove();
+a.remove();
         
         toast({
             title: 'Download Ready!',
@@ -596,7 +600,7 @@ export default function AudioProcessor({
           <Label htmlFor="audio-upload">1. Upload Audio File</Label>
           <div
             className={cn(
-                "relative flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-input bg-background/50 p-8 transition-colors hover:border-primary/50 hover:bg-accent/10",
+                "relative flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-input bg-background/50 p-8 transition-colors hover:border-primary/50 hover:bg-primary/10",
                 isBusy && "cursor-not-allowed opacity-50"
             )}
             onClick={() => !isBusy && document.getElementById('audio-upload')?.click()}
@@ -761,6 +765,12 @@ export default function AudioProcessor({
           </Card>
         )}
         
+        {decodedBuffer && (
+          <div className="pt-4">
+            <AudioVisualizer analyserNode={analyserNode} isPlaying={isPlaying} />
+          </div>
+        )}
+
         {error && (
             <Alert variant="destructive">
                 <XCircle className="h-4 w-4" />
@@ -770,7 +780,7 @@ export default function AudioProcessor({
         )}
 
       </CardContent>
-      <CardFooter className="flex flex-col sm:flex-row gap-2">
+      <CardFooter className="flex flex-col sm:flex-row gap-4">
         <Button onClick={togglePreview} disabled={!decodedBuffer || isBusy} className="w-full sm:w-auto" variant="outline">
           {isPlaying ? <Pause className="mr-2 h-4 w-4 text-primary" /> : <Play className="mr-2 h-4 w-4 text-primary" />}
           {isPlaying ? 'Pause Preview' : 'Play Preview'}
