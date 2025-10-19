@@ -508,6 +508,61 @@ export default function AudioProcessor({
     });
   }
 
+  const renderVideo = (renderedBuffer: AudioBuffer) => {
+    return new Promise<void>((resolve, reject) => {
+        const canvas = visualizerCanvasRef.current;
+        if (!canvas) {
+            reject(new Error("Visualizer canvas not found"));
+            return;
+        }
+
+        const renderAudioCtx = new AudioContext();
+        const renderedSource = renderAudioCtx.createBufferSource();
+        renderedSource.buffer = renderedBuffer;
+
+        const mediaStreamDestination = renderAudioCtx.createMediaStreamDestination();
+        renderedSource.connect(mediaStreamDestination);
+        
+        const videoStream = canvas.captureStream(60); 
+        const audioStream = mediaStreamDestination.stream;
+        
+        const combinedStream = new MediaStream([
+            videoStream.getVideoTracks()[0],
+            audioStream.getAudioTracks()[0],
+        ]);
+
+        const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+        const chunks: Blob[] = [];
+        
+        recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+                chunks.push(e.data);
+            }
+        };
+
+        recorder.onstop = () => {
+            const videoBlob = new Blob(chunks, { type: 'video/webm' });
+            downloadFile(videoBlob, 'video');
+            renderAudioCtx.close();
+            videoStream.getTracks().forEach(track => track.stop());
+            audioStream.getTracks().forEach(track => track.stop());
+            resolve();
+        };
+
+        renderedSource.onended = () => {
+            // Add a small delay to ensure the last frames are captured
+            setTimeout(() => {
+                if (recorder.state === 'recording') {
+                    recorder.stop();
+                }
+            }, 500); 
+        };
+
+        recorder.start();
+        renderedSource.start();
+    });
+};
+
   const handleDownload = async (fileType: 'audio' | 'video') => {
     if (!decodedBuffer) {
         toast({
@@ -555,85 +610,36 @@ export default function AudioProcessor({
         const graphFilterNode = filterNode;
         const graphGainNode = gainNode;
 
-        const timeStep = 1 / 60; // Render at 60fps
-        for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
-            const { x, y, z, gain, freq } = getAnimationPath(time);
-            const rampTime = time;
-            graphPannerNode?.positionX.setValueAtTime(x, rampTime);
-            graphPannerNode?.positionY.setValueAtTime(y, rampTime);
-            graphPannerNode?.positionZ.setValueAtTime(z, rampTime);
-            graphFilterNode?.frequency.setValueAtTime(freq, rampTime);
-            graphGainNode?.gain.setValueAtTime(gain, rampTime);
+        if (graphPannerNode && graphFilterNode && graphGainNode) {
+            const timeStep = 1 / 120; // Increase precision for smoother offline render
+            for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
+                const { x, y, z, gain, freq } = getAnimationPath(time);
+                const rampTime = time;
+                graphPannerNode.positionX.setValueAtTime(x, rampTime);
+                graphPannerNode.positionY.setValueAtTime(y, rampTime);
+                graphPannerNode.positionZ.setValueAtTime(z, rampTime);
+                graphFilterNode.frequency.setValueAtTime(freq, rampTime);
+                graphGainNode.gain.setValueAtTime(gain, rampTime);
+            }
         }
         
-        offlineCtx.oncomplete = async (event) => {
-            const renderedBuffer = event.renderedBuffer;
-            if (fileType === 'video') {
-                const canvas = visualizerCanvasRef.current;
-                if (!canvas) throw new Error("Visualizer canvas not found");
-                
-                const renderAudioCtx = new AudioContext();
-                const renderedSource = renderAudioCtx.createBufferSource();
-                renderedSource.buffer = renderedBuffer;
-
-                const mediaStreamDestination = renderAudioCtx.createMediaStreamDestination();
-                renderedSource.connect(mediaStreamDestination);
-                
-                const videoStream = canvas.captureStream(60); 
-                const audioStream = mediaStreamDestination.stream;
-                
-                const combinedStream = new MediaStream([
-                    videoStream.getVideoTracks()[0],
-                    audioStream.getAudioTracks()[0],
-                ]);
-
-                const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
-                const chunks: Blob[] = [];
-                
-                recorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) {
-                        chunks.push(e.data);
-                    }
-                };
-
-                recorder.onstop = () => {
-                    const videoBlob = new Blob(chunks, { type: 'video/webm' });
-                    downloadFile(videoBlob, 'video');
-                    renderAudioCtx.close();
-                    videoStream.getTracks().forEach(track => track.stop());
-                    audioStream.getTracks().forEach(track => track.stop());
-                };
-                
-                renderedSource.onended = () => {
-                    setTimeout(() => {
-                        if (recorder.state === 'recording') {
-                            recorder.stop();
-                        }
-                    }, 500); 
-                };
-
-                recorder.start();
-                renderedSource.start();
-
-            } else {
-                const wavBlob = bufferToWav(renderedBuffer);
-                downloadFile(wavBlob, 'audio');
-            }
-            setIsRendering(false);
-            if (wasPlaying && decodedBuffer) {
-              playPreview();
-            }
-        };
-
         const renderInterval = setInterval(() => {
             setRenderProgress( (offlineCtx.currentTime / decodedBuffer.duration) * 100 );
         }, 100);
-
+        
         offlineSource.start(0);
-        await offlineCtx.startRendering();
+
+        const renderedBuffer = await offlineCtx.startRendering();
+        
         clearInterval(renderInterval);
         setRenderProgress(100);
 
+        if (fileType === 'video') {
+            await renderVideo(renderedBuffer);
+        } else {
+            const wavBlob = bufferToWav(renderedBuffer);
+            downloadFile(wavBlob, 'audio');
+        }
 
     } catch (e) {
         console.error('Offline rendering error:', e);
@@ -644,7 +650,11 @@ export default function AudioProcessor({
             description: `Could not render the ${fileType}.`,
             variant: 'destructive',
         });
+    } finally {
         setIsRendering(false);
+        if (wasPlaying && decodedBuffer) {
+          playPreview();
+        }
     }
   };
 
@@ -701,7 +711,7 @@ export default function AudioProcessor({
             {(isBusy || isRendering) && (
                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
                   <RotateCw className="mb-4 h-12 w-12 animate-spin text-primary" />
-                  <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : `Rendering... (${Math.round(renderProgress)}%)`}</p>
+                  <p className="font-semibold text-foreground">{isDecoding ? "Decoding..." : `Rendering...`}</p>
                </div>
             )}
           </div>
@@ -913,3 +923,5 @@ export default function AudioProcessor({
     </Card>
   );
 }
+
+    
