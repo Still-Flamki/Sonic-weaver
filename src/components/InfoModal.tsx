@@ -116,7 +116,7 @@ export function InfoModal({ children }: { children: React.ReactNode }) {
               <br />
               - <strong>Movement:</strong> Figure-8 <br />
               - <strong>Speed:</strong> 1-2 (Very Slow) <br />
-              - <strong>Width:</strong> 9-10 (Very Wide) <br />g
+              - <strong>Width:</strong> 9-10 (Very Wide) <br />
               - <strong>Reverb:</strong> 0.4-0.6 (Hall-like) <br />
               - <strong>EQ:</strong> Flat (0dB on all bands), or a slight Treble boost (+1dB).
             </p>
