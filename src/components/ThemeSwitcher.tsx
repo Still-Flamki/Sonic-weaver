@@ -9,7 +9,7 @@ const themes = [
   { name: 'Light', value: 'light' },
   { name: 'Fire & Gold', value: 'theme-fire-gold' },
   { name: 'Ocean & Sky', value: 'theme-ocean-sky' },
-  { name: 'Earth & Sky', value 'theme-earth-sky' },
+  { name: 'Earth & Sky', value: 'theme-earth-sky' },
   { name: 'Hell & Heaven', value: 'theme-hell-heaven' },
   { name: 'Silver', value: 'theme-silver' },
 ];
