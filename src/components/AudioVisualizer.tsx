@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, forwardRef } from 'react';
 
-export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'petal' | 'skyline' | 'chromatic';
+export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'petal' | 'skyline' | 'chromatic' | 'kaleidoscope';
 
 interface AudioVisualizerProps {
   analyserNode: AnalyserNode | null;
@@ -288,7 +288,6 @@ const drawChromatic = (
   
     const bufferLength = dataArray.length;
     const sliceWidth = width * 1.0 / bufferLength;
-    const centerY = height / 2;
   
     const volume = dataArray.reduce((sum, val) => sum + Math.abs(val - 128), 0) / bufferLength;
     const aberrationAmount = Math.pow(volume / 50, 2) * (width * 0.05);
@@ -330,6 +329,79 @@ const drawChromatic = (
     ctx.globalCompositeOperation = 'source-over'; // Reset composite operation
   };
 
+  const drawKaleidoscope = (
+    ctx: CanvasRenderingContext2D,
+    analyser: AnalyserNode,
+    dataArray: Uint8Array,
+    width: number,
+    height: number,
+    time: number
+  ) => {
+    analyser.getByteTimeDomainData(dataArray);
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(freqData);
+
+    ctx.fillStyle = 'rgba(10, 18, 28, 0.2)';
+    ctx.fillRect(0, 0, width, height);
+
+    const bufferLength = dataArray.length;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    const bassAvg = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
+    const midAvg = freqData.slice(10, 30).reduce((s, v) => s + v, 0) / 20 / 255;
+    const trebleAvg = freqData.slice(50, 100).reduce((s, v) => s + v, 0) / 50 / 255;
+
+    const slices = 4 + Math.floor(bassAvg * 8);
+    const angleIncrement = (Math.PI * 2) / slices;
+
+    const rotation = time * 0.0001;
+    const zoom = 1 + bassAvg * 0.5;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.scale(zoom, zoom);
+    ctx.rotate(rotation);
+
+    for (let k = 0; k < slices; k++) {
+        ctx.beginPath();
+        let moved = false;
+
+        const sliceAngle = k * angleIncrement;
+        ctx.save();
+        ctx.rotate(sliceAngle);
+        // Flip every other slice for a true kaleidoscope effect
+        if (k % 2 === 1) {
+            ctx.scale(1, -1);
+        }
+
+        for (let i = 0; i < bufferLength; i += 8) {
+            const v = dataArray[i] / 128.0; // 0-2
+            const y = (v - 1) * (height * 0.1); // -1 to 1
+            const x = (i / bufferLength) * (width * 0.25);
+            
+            if (!moved) {
+                ctx.moveTo(x, y);
+                moved = true;
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        
+        const r = 50 + Math.floor(trebleAvg * 205);
+        const g = 50 + Math.floor(midAvg * 205);
+        const b = 120 + Math.floor(bassAvg * 135);
+        const alpha = 0.3 + (bassAvg + midAvg + trebleAvg) / 3 * 0.7;
+
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        ctx.lineWidth = 1 + bassAvg * 3;
+        ctx.stroke();
+
+        ctx.restore();
+    }
+    ctx.restore();
+};
+
 
 // Main component
 const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
@@ -353,7 +425,7 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     if(!canvasCtx) return;
 
     // Different visualizers prefer different data
-    if (['orb', 'petal', 'chromatic'].includes(visualizationType)) {
+    if (['orb', 'petal', 'chromatic', 'kaleidoscope'].includes(visualizationType)) {
         analyserNode.fftSize = 1024;
     } else { // bars, tunnel, skyline
         analyserNode.fftSize = 256;
@@ -398,6 +470,9 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
         case 'chromatic':
             drawChromatic(canvasCtx, analyserNode, dataArray, width, height);
             break;
+        case 'kaleidoscope':
+            drawKaleidoscope(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
+            break;
         default:
           // Clear canvas if type is unknown
           canvasCtx.fillStyle = 'rgba(10, 18, 28, 1)';
@@ -419,3 +494,5 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
 
 AudioVisualizer.displayName = 'AudioVisualizer';
 export default AudioVisualizer;
+
+    

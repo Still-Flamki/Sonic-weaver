@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import AudioVisualizer, { VisualizationType } from './AudioVisualizer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
@@ -61,7 +61,7 @@ export default function AudioProcessor({
   const [customMid, setCustomMid] = useState(0);
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
-  const [visualizationType, setVisualizationType] = useState<VisualizationType>('chromatic');
+  const [visualizationType, setVisualizationType] = useState<VisualizationType>('kaleidoscope');
 
 
   const { toast } = useToast();
@@ -810,12 +810,13 @@ export default function AudioProcessor({
                         <SelectValue placeholder="Select a visualization" />
                     </SelectTrigger>
                     <SelectContent>
+                        <SelectItem value="kaleidoscope">Kaleidoscopic Echoes</SelectItem>
                         <SelectItem value="chromatic">Chromatic Aberration</SelectItem>
-                        <SelectItem value="orb">Orb</SelectItem>
-                        <SelectItem value="bars">Bars</SelectItem>
-                        <SelectItem value="tunnel">Tunnel</SelectItem>
-                        <SelectItem value="petal">Petal Bloom</SelectItem>
                         <SelectItem value="skyline">Neon Skyline</SelectItem>
+                        <SelectItem value="petal">Petal Bloom</SelectItem>
+                        <SelectItem value="tunnel">Warp Tunnel</SelectItem>
+                        <SelectItem value="orb">Waveform Orb</SelectItem>
+                        <SelectItem value="bars">Frequency Bars</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -873,3 +874,5 @@ export default function AudioProcessor({
     </Card>
   );
 }
+
+    
