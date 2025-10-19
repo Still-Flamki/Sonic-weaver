@@ -121,15 +121,8 @@ export default function AudioDemo() {
         break;
     }
     const path = { x, y, z };
-
-    const distance = Math.sqrt(path.x*path.x + path.y*path.y + path.z*path.z);
-    const maxDistance = radius * 1.81; // Approximate max distance in the 11D path
-    const normalizedDistance = Math.min(distance / maxDistance, 1);
-    
-    // Adjusted gain: starts at 1, dips to 0.5, and is never silent.
-    const gain = 1 - (normalizedDistance * 0.5);
-    
-    const freq = z > 0 ? 3000 + (z / zRadius) * 2000 : 5000 - (Math.abs(z) / zRadius) * 2000;
+    const gain = 1;
+    const freq = 1000;
 
     return { ...path, gain, freq };
   };
