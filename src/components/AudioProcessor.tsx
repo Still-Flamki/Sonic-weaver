@@ -86,13 +86,23 @@ export default function AudioProcessor({
   
   useEffect(() => {
     if (isPlaying && effectType === 'Custom') {
-        if(wetNode?.gain) wetNode.gain.value = customReverb;
-        if(dryNode?.gain) dryNode.gain.value = 1 - customReverb;
-        if(lowShelfFilter?.gain) lowShelfFilter.gain.value = customBass;
-        if(midPeakingFilter?.gain) midPeakingFilter.gain.value = customMid;
-        if(highShelfFilter?.gain) highShelfFilter.gain.value = customTreble;
+      if(audioContext && wetNode?.gain) {
+        wetNode.gain.linearRampToValueAtTime(customReverb, audioContext.currentTime + 0.1);
+      }
+      if(audioContext && dryNode?.gain) {
+        dryNode.gain.linearRampToValueAtTime(1 - customReverb, audioContext.currentTime + 0.1);
+      }
+      if(audioContext && lowShelfFilter?.gain) {
+        lowShelfFilter.gain.linearRampToValueAtTime(customBass, audioContext.currentTime + 0.1);
+      }
+      if(audioContext && midPeakingFilter?.gain) {
+        midPeakingFilter.gain.linearRampToValueAtTime(customMid, audioContext.currentTime + 0.1);
+      }
+      if(audioContext && highShelfFilter?.gain) {
+        highShelfFilter.gain.linearRampToValueAtTime(customTreble, audioContext.currentTime + 0.1);
+      }
     }
-  }, [customReverb, customBass, customMid, customTreble, isPlaying, effectType]);
+  }, [customReverb, customBass, customMid, customTreble, isPlaying, effectType, audioContext]);
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -281,11 +291,11 @@ export default function AudioProcessor({
             lastNodeInChain.connect(wetNode);
         }
 
-        if(convolverNode && pannerNode) {
+        if(convolverNode && pannerNode && wetNode) {
             wetNode.connect(convolverNode);
             convolverNode.connect(pannerNode);
         }
-        if(filterNode && pannerNode) {
+        if(filterNode && pannerNode && dryNode) {
             dryNode.connect(filterNode);
             filterNode.connect(pannerNode);
         }
@@ -313,14 +323,16 @@ export default function AudioProcessor({
 };
 
   const startSpatialAnimation = async () => {
-    if (!audioContext || !pannerNode || !filterNode || !gainNode) return;
+    if (!audioContext) return;
   
+    await setupAudioGraph(audioContext);
+
+    if (!pannerNode || !filterNode || !gainNode) return;
+
     const p = pannerNode;
     const f = filterNode;
     const g = gainNode;
     
-    await setupAudioGraph(audioContext);
-
     const startTime = audioContext.currentTime;
 
     const animate = () => {
@@ -349,8 +361,11 @@ export default function AudioProcessor({
     
     if (isPlaying) {
       stopPreview();
+      // We want to stop, not toggle, if it's already playing but we click again.
+      // But if we want to restart with new settings, we let it continue.
+      // The togglePreview handles this logic.
+      return;
     }
-
 
     await audioContext.resume();
 
