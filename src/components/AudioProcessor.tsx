@@ -16,6 +16,7 @@ import AudioVisualizer, { VisualizationType } from './AudioVisualizer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from './ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -66,6 +67,7 @@ export default function AudioProcessor({
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
   const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
+  const [activeTab, setActiveTab] = useState('presets');
 
 
   const { toast } = useToast();
@@ -681,10 +683,24 @@ export default function AudioProcessor({
 
   const handleEffectChange = (value: EffectType) => {
       setEffectType(value);
+      if(value !== 'Custom') {
+        setActiveTab('presets');
+      } else {
+        setActiveTab('custom');
+      }
       if (isPlaying) {
         stopPreview();
         setTimeout(() => playPreview(), 50);
       }
+  }
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (value === 'presets' && effectType === 'Custom') {
+      setEffectType('8D');
+    } else if (value === 'custom') {
+      setEffectType('Custom');
+    }
   }
 
   return (
@@ -741,129 +757,122 @@ export default function AudioProcessor({
         {/* Step 2: Effect Selection */}
         <div className="space-y-3">
             <Label className="text-lg font-headline">2. Select Effect</Label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {(['4D', '8D', '11D', 'Custom'] as const).map(effect => (
-                    <button
-                    key={effect}
-                    onClick={() => handleEffectChange(effect)}
-                    disabled={isBusy || isRendering}
-                    className={cn(
-                        "rounded-md border p-4 text-lg font-semibold transition-all duration-200",
-                        "border-input bg-background/50 hover:border-primary/50 hover:bg-primary/10",
-                        effectType === effect ? "border-primary bg-primary/20 text-primary-foreground shadow-lg shadow-primary/10 ring-2 ring-primary" : "text-muted-foreground",
-                        (isBusy || isRendering) && "cursor-not-allowed opacity-50"
-                    )}
-                    >
-                    {effect}
-                    </button>
-                ))}
-            </div>
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="presets">Presets</TabsTrigger>
+                <TabsTrigger value="custom">Custom</TabsTrigger>
+              </TabsList>
+              <TabsContent value="presets" className="mt-4">
+                <div className="grid grid-cols-3 gap-4">
+                  {(['4D', '8D', '11D'] as const).map(effect => (
+                      <button
+                      key={effect}
+                      onClick={() => handleEffectChange(effect)}
+                      disabled={isBusy || isRendering}
+                      className={cn(
+                          "rounded-md border p-4 text-lg font-semibold transition-all duration-200",
+                          "border-input bg-background/50 hover:border-primary/50 hover:bg-primary/10",
+                          effectType === effect ? "border-primary bg-primary/20 text-primary-foreground shadow-lg shadow-primary/10 ring-2 ring-primary" : "text-muted-foreground",
+                          (isBusy || isRendering) && "cursor-not-allowed opacity-50"
+                      )}
+                      >
+                      {effect}
+                      </button>
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="custom" className="mt-4">
+                <Card className="bg-background/50 border-border">
+                  <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 pt-6">
+                      <div className="grid gap-2">
+                          <Label htmlFor="movement-path-select">Movement Path</Label>
+                          <Select value={customMovement} onValueChange={(val: MovementPath) => setCustomMovement(val)} disabled={isBusy || isRendering}>
+                              <SelectTrigger id="movement-path-select">
+                                  <SelectValue placeholder="Select a path" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="Figure-8">Figure-8</SelectItem>
+                                  <SelectItem value="Circle">Circle</SelectItem>
+                                  <SelectItem value="Wide Arc">Wide Arc</SelectItem>
+                              </SelectContent>
+                          </Select>
+                      </div>
+                      <div className="grid gap-2">
+                          <Label htmlFor="speed-slider">Speed ({customSpeed})</Label>
+                          <Slider
+                              id="speed-slider"
+                              min={1} max={15}
+                              value={[customSpeed]}
+                              onValueChange={(val) => setCustomSpeed(val[0])}
+                              disabled={isBusy || isRendering}
+                          />
+                      </div>
+                      <div className="grid gap-2">
+                          <Label htmlFor="width-slider">Width ({customWidth})</Label>
+                          <Slider
+                              id="width-slider"
+                              min={1} max={10}
+                              value={[customWidth]}
+                              onValueChange={(val) => setCustomWidth(val[0])}
+                              disabled={isBusy || isRendering}
+                          />
+                      </div>
+                      <div className="grid gap-2">
+                          <Label htmlFor="reverb-slider">Reverb ({customReverb.toFixed(2)})</Label>
+                          <Slider
+                              id="reverb-slider"
+                              min={0} max={1} step={0.05}
+                              value={[customReverb]}
+                              onValueChange={(val) => setCustomReverb(val[0])}
+                              disabled={isBusy || isRendering}
+                          />
+                      </div>
+                      <div className="grid gap-4 col-span-1 md:col-span-2">
+                          <Label>3-Band EQ</Label>
+                          <div className="grid gap-2">
+                              <Label htmlFor="bass-slider" className="text-sm">Bass ({customBass}dB)</Label>
+                              <Slider
+                                  id="bass-slider"
+                                  min={-10} max={10} step={1}
+                                  value={[customBass]}
+                                  onValueChange={(val) => setCustomBass(val[0])}
+                                  disabled={isBusy || isRendering}
+                              />
+                          </div>
+                          <div className="grid gap-2">
+                              <Label htmlFor="mid-slider" className="text-sm">Mids ({customMid}dB)</Label>
+                              <Slider
+                                  id="mid-slider"
+                                  min={-10} max={10} step={1}
+                                  value={[customMid]}
+                                  onValueChange={(val) => setCustomMid(val[0])}
+                                  disabled={isBusy || isRendering}
+                              />
+                          </div>
+                          <div className="grid gap-2">
+                              <Label htmlFor="treble-slider" className="text-sm">Treble ({customTreble}dB)</Label>
+                              <Slider
+                                  id="treble-slider"
+                                  min={-10} max={10} step={1}
+                                  value={[customTreble]}
+                                  onValueChange={(val) => setCustomTreble(val[0])}
+                                  disabled={isBusy || isRendering}
+                              />
+                          </div>
+                      </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
         </div>
 
-        {/* Step 3: Custom Controls */}
-        {effectType === 'Custom' && (
-          <>
-            <Separator />
-            <div className="space-y-3">
-              <Label className="text-lg font-headline">3. Customize Effect</Label>
-              <Card className="bg-background/50 border-border">
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 pt-6">
-                    <div className="grid gap-2">
-                        <Label htmlFor="movement-path-select">Movement Path</Label>
-                        <Select value={customMovement} onValueChange={(val: MovementPath) => setCustomMovement(val)} disabled={isBusy || isRendering}>
-                            <SelectTrigger id="movement-path-select">
-                                <SelectValue placeholder="Select a path" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Figure-8">Figure-8</SelectItem>
-                                <SelectItem value="Circle">Circle</SelectItem>
-                                <SelectItem value="Wide Arc">Wide Arc</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="speed-slider">Speed ({customSpeed})</Label>
-                        <Slider
-                            id="speed-slider"
-                            min={1} max={15}
-                            value={[customSpeed]}
-                            onValueChange={(val) => setCustomSpeed(val[0])}
-                            disabled={isBusy || isRendering}
-                        />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="width-slider">Width ({customWidth})</Label>
-                        <Slider
-                            id="width-slider"
-                            min={1} max={10}
-                            value={[customWidth]}
-                            onValueChange={(val) => setCustomWidth(val[0])}
-                            disabled={isBusy || isRendering}
-                        />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="reverb-slider">Reverb ({customReverb.toFixed(2)})</Label>
-                        <Slider
-                            id="reverb-slider"
-                            min={0} max={1} step={0.05}
-                            value={[customReverb]}
-                            onValueChange={(val) => setCustomReverb(val[0])}
-                            disabled={isBusy || isRendering}
-                        />
-                    </div>
-                    <div className="grid gap-2 col-span-1 md:col-span-2">
-                        <Label className="mb-2">3-Band EQ</Label>
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="bass-slider" className="text-sm text-center">Bass ({customBass}dB)</Label>
-                                <Slider
-                                    id="bass-slider"
-                                    min={-10} max={10} step={1}
-                                    value={[customBass]}
-                                    onValueChange={(val) => setCustomBass(val[0])}
-                                    disabled={isBusy || isRendering}
-                                    orientation="vertical"
-                                    className="h-24 mx-auto"
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="mid-slider" className="text-sm text-center">Mids ({customMid}dB)</Label>
-                                <Slider
-                                    id="mid-slider"
-                                    min={-10} max={10} step={1}
-                                    value={[customMid]}
-                                    onValueChange={(val) => setCustomMid(val[0])}
-                                    disabled={isBusy || isRendering}
-                                    orientation="vertical"
-                                    className="h-24 mx-auto"
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="treble-slider" className="text-sm text-center">Treble ({customTreble}dB)</Label>
-                                <Slider
-                                    id="treble-slider"
-                                    min={-10} max={10} step={1}
-                                    value={[customTreble]}
-                                    onValueChange={(val) => setCustomTreble(val[0])}
-                                    disabled={isBusy || isRendering}
-                                    orientation="vertical"
-                                    className="h-24 mx-auto"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
         
         {decodedBuffer && (
           <>
             <Separator />
             <div className="space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <Label className="text-lg font-headline">4. Preview & Visualize</Label>
+                <Label className="text-lg font-headline">3. Preview & Visualize</Label>
                 <Select value={visualizationType} onValueChange={(val: VisualizationType) => setVisualizationType(val)} disabled={isBusy || isRendering}>
                     <SelectTrigger id="viz-select" className="w-full sm:w-[240px]">
                         <SelectValue placeholder="Select a visualization" />

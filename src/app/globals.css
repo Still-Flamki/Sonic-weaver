@@ -58,32 +58,32 @@
     --chart-5: 340 75% 55%;
   }
 
-  /* Midnight Plum */
-  .theme-midnight-plum {
-    --background: 250 30% 6%; /* Very dark, almost black blue-purple */
-    --foreground: 250 20% 96%;
-    --card: 250 25% 9%;
-    --card-foreground: 250 20% 96%;
-    --popover: 250 30% 6%;
-    --popover-foreground: 250 20% 96%;
-    --primary: 255 70% 75%; /* Soft, elegant lavender */
-    --primary-foreground: 250 30% 10%;
-    --secondary: 250 20% 15%;
-    --secondary-foreground: 250 20% 96%;
-    --muted: 250 20% 12%;
-    --muted-foreground: 250 15% 65%;
-    --accent: 330 60% 60%; /* Muted, sophisticated pink/magenta */
-    --accent-foreground: 330 20% 98%;
+  /* Deep Space */
+  .theme-deep-space {
+    --background: 240 10% 4%; /* Very dark, near-black blue */
+    --foreground: 240 10% 95%;
+    --card: 240 8% 8%;
+    --card-foreground: 240 10% 95%;
+    --popover: 240 10% 4%;
+    --popover-foreground: 240 10% 95%;
+    --primary: 250 50% 70%; /* Muted Lavender */
+    --primary-foreground: 250 50% 10%;
+    --secondary: 220 15% 15%; /* Cool Gray-Blue */
+    --secondary-foreground: 220 10% 95%;
+    --muted: 220 15% 12%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 220 20% 30%; /* A slightly brighter gray-blue for accents */
+    --accent-foreground: 220 10% 98%;
     --destructive: 0 60% 50%;
     --destructive-foreground: 0 0% 100%;
-    --border: 250 20% 18%;
-    --input: 250 20% 20%;
-    --ring: 255 70% 75%;
-    --chart-1: 255 70% 75%;
-    --chart-2: 330 60% 60%;
-    --chart-3: 280 65% 70%;
-    --chart-4: 240 50% 65%;
-    --chart-5: 300 55% 68%;
+    --border: 240 10% 15%;
+    --input: 240 10% 18%;
+    --ring: 250 50% 70%;
+    --chart-1: 250 50% 70%;
+    --chart-2: 220 20% 50%;
+    --chart-3: 280 40% 65%;
+    --chart-4: 200 50% 60%;
+    --chart-5: 300 45% 68%;
   }
 }
 
