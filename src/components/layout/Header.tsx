@@ -9,11 +9,11 @@ export function Header() {
     <header className="py-6 px-4 md:px-6">
       <div className="container mx-auto flex flex-col items-center justify-between gap-6">
         <div className="flex w-full items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-4 group flex-shrink-0">
+          <Link href="/" className="flex items-center gap-2 md:gap-4 group flex-shrink-0">
             <div className="p-2 bg-primary/20 border border-primary/50 rounded-lg group-hover:bg-primary/30 transition-colors">
-              <Music4 className="text-primary h-6 w-6" />
+              <Music4 className="text-primary h-5 w-5 md:h-6 md:w-6" />
             </div>
-            <h1 className="text-2xl md:text-3xl font-headline font-bold text-foreground">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-headline font-bold text-foreground">
               Sonic Weaver
             </h1>
           </Link>

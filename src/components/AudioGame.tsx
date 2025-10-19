@@ -148,7 +148,7 @@ export default function AudioGame() {
                 onClick={() => handleGuess(loc)}
                 disabled={gameState !== 'guessing'}
                 className={cn(
-                    "w-32 h-16 transition-all duration-300",
+                    "w-24 h-16 md:w-32 md:h-16 transition-all duration-300 text-xs md:text-sm",
                     isCorrect && "bg-green-500/80 border-green-400 text-white",
                     isIncorrect && "bg-destructive/80 border-destructive-foreground/50 text-white"
                 )}
@@ -166,19 +166,19 @@ export default function AudioGame() {
   return (
     <div className="max-w-4xl mx-auto">
       <Card className="relative shadow-lg bg-card/50 backdrop-blur-sm border-accent/20 shadow-accent/10 overflow-hidden">
-        <div className="flex flex-col justify-center items-center text-center p-8 md:p-10 min-h-[500px]">
+        <div className="flex flex-col justify-center items-center text-center p-4 md:p-10 min-h-[400px] md:min-h-[500px]">
             <div className="w-full">
-              <CardTitle className="font-headline text-2xl tracking-tight mb-2">
+              <CardTitle className="font-headline text-xl md:text-2xl tracking-tight mb-2">
                 Where is the sound?
               </CardTitle>
-              <div className="flex items-center justify-center gap-4 text-lg font-semibold">
+              <div className="flex items-center justify-center gap-4 text-base md:text-lg font-semibold">
                   <span>Score: {score} / 5</span>
               </div>
             </div>
 
             {gameState === 'idle' ? (
                 <div className="flex-1 flex flex-col items-center justify-center h-full gap-4 my-8">
-                    <p className="text-muted-foreground text-center max-w-xs">Press Start to begin the game. <br/> Headphones are required!</p>
+                    <p className="text-muted-foreground text-center max-w-xs text-sm md:text-base">Press Start to begin the game. <br/> Headphones are required!</p>
                     <Button onClick={startRound} size="lg" variant="secondary" className="bg-accent text-accent-foreground hover:bg-accent/90">
                         <Play className="mr-2 h-5 w-5" />
                         Start Game
@@ -186,11 +186,11 @@ export default function AudioGame() {
                 </div>
             ) : (
                 <div className="flex-1 flex flex-col w-full items-center justify-center my-6">
-                    <div className="grid grid-cols-3 grid-rows-3 gap-4 w-full max-w-sm aspect-square">
+                    <div className="grid grid-cols-3 grid-rows-3 gap-2 md:gap-4 w-full max-w-xs md:max-w-sm aspect-square">
                         {renderGuessButton('Front Left', 'col-start-1 row-start-1')}
                         <div className="col-start-2 row-start-2 flex items-center justify-center">
-                            <div className="h-24 w-24 rounded-full bg-primary/20 flex items-center justify-center">
-                                <Volume2 className="h-12 w-12 text-primary animate-pulse" />
+                            <div className="h-20 w-20 md:h-24 md:w-24 rounded-full bg-primary/20 flex items-center justify-center">
+                                <Volume2 className="h-10 w-10 md:h-12 md:w-12 text-primary animate-pulse" />
                             </div>
                         </div>
                         {renderGuessButton('Front Right', 'col-start-3 row-start-1')}

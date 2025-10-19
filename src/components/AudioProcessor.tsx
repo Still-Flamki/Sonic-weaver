@@ -706,7 +706,7 @@ export default function AudioProcessor({
   return (
     <Card className="w-full shadow-xl shadow-primary/5 border-primary/20 bg-card/80 backdrop-blur-xl">
       <CardHeader>
-        <CardTitle className="font-headline text-3xl tracking-tight">Audio Processor</CardTitle>
+        <CardTitle className="font-headline text-2xl md:text-3xl tracking-tight">Audio Processor</CardTitle>
         <CardDescription>Upload a track, select an effect, and experience real spatial audio.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -763,7 +763,7 @@ export default function AudioProcessor({
                 <TabsTrigger value="custom">Custom</TabsTrigger>
               </TabsList>
               <TabsContent value="presets" className="mt-4">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {(['4D', '8D', '11D'] as const).map(effect => (
                       <button
                       key={effect}
