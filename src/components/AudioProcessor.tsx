@@ -147,8 +147,10 @@ export default function AudioProcessor({
       gainNode.connect(dryNode);
       gainNode.connect(wetNode);
       wetNode.connect(convolverNode);
-      dryNode.connect(pannerNode);
-      convolverNode.connect(pannerNode);
+      dryNode.connect(filterNode);
+      convolverNode.connect(filterNode);
+      filterNode.connect(pannerNode);
+
     } else {
         gainNode.connect(filterNode);
         filterNode.connect(pannerNode);
@@ -157,6 +159,7 @@ export default function AudioProcessor({
 
     let duration: number;
     let path: (time: number) => { x: number; y: number; z: number };
+    const zRadius = radius * 1.5; // Exaggerate front-back distance
 
     switch (effectType) {
       case '4D':
@@ -186,19 +189,19 @@ export default function AudioProcessor({
           switch(segment) {
             case 0: // Right to Front
               x = radius * (1 - progress);
-              z = -radius * progress;
+              z = -zRadius * progress;
               break;
             case 1: // Front to Left
               x = -radius * progress;
-              z = -radius * (1 - progress);
+              z = -zRadius * (1 - progress);
               break;
             case 2: // Left to Back
               x = -radius * (1 - progress);
-              z = radius * progress;
+              z = zRadius * progress;
               break;
             case 3: // Back to Right
               x = radius * progress;
-              z = radius * (1 - progress);
+              z = zRadius * (1 - progress);
               break;
           }
           return { x, y, z };
@@ -223,12 +226,13 @@ export default function AudioProcessor({
       p.positionY.linearRampToValueAtTime(y, audioContext.currentTime + 0.05);
       p.positionZ.linearRampToValueAtTime(z, audioContext.currentTime + 0.05);
       
-      const freq = 5000 + (z + radius) / (2 * radius) * 10000;
+      // More aggressive filter for back position
+      const freq = z > 0 ? 3000 + (z / zRadius) * 2000 : 5000 + (z + zRadius) / (2 * zRadius) * 10000;
       f.frequency.linearRampToValueAtTime(freq, audioContext.currentTime + 0.05);
 
       const distance = Math.sqrt(x*x + y*y + z*z);
       const newGain = 1 - (distance / (radius * 2));
-      g.gain.linearRampToValueAtTime(Math.max(0.3, newGain), audioContext.currentTime + 0.05);
+      g.gain.linearRampToValueAtTime(newGain, audioContext.currentTime + 0.05);
 
 
       animationFrameRef.current = requestAnimationFrame(animate);
