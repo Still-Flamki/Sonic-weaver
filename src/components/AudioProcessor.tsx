@@ -530,7 +530,6 @@ a.remove();
             decodedBuffer.sampleRate
         );
         
-        // This destination is only used for the offline rendering of the audio buffer.
         await setupAudioGraph(offlineCtx, offlineCtx.destination);
         
         if(offlineCtx.listener.positionX) {
@@ -564,17 +563,16 @@ a.remove();
         }
 
         offlineSource.start(0);
-
         const renderedBuffer = await offlineCtx.startRendering();
 
         if (fileType === 'video') {
             const canvas = visualizerCanvasRef.current;
             if (!canvas) throw new Error("Visualizer canvas not found");
             
-            // Create a temporary real-time context to play the rendered buffer and get a stream
             const renderAudioCtx = new AudioContext();
             const renderedSource = renderAudioCtx.createBufferSource();
             renderedSource.buffer = renderedBuffer;
+
             const mediaStreamDestination = renderAudioCtx.createMediaStreamDestination();
             renderedSource.connect(mediaStreamDestination);
             
@@ -589,23 +587,28 @@ a.remove();
             const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
             const chunks: Blob[] = [];
             
-            recorder.ondataavailable = (event) => chunks.push(event.data);
+            recorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    chunks.push(event.data);
+                }
+            };
 
             recorder.onstop = () => {
                 const videoBlob = new Blob(chunks, { type: 'video/webm' });
                 downloadFile(videoBlob, 'video');
                 renderAudioCtx.close();
+                videoStream.getTracks().forEach(track => track.stop());
+                audioStream.getTracks().forEach(track => track.stop());
+            };
+            
+            renderedSource.onended = () => {
+                setTimeout(() => {
+                    recorder.stop();
+                }, 100);
             };
 
             recorder.start();
             renderedSource.start();
-            
-            renderedSource.onended = () => {
-              // A small delay to ensure the last frames are captured
-              setTimeout(() => {
-                recorder.stop();
-              }, 100);
-            }
 
         } else {
             const wavBlob = bufferToWav(renderedBuffer);
