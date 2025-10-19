@@ -69,7 +69,7 @@ export default function AudioProcessor({
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
   const [visualizationType, setVisualizationType] = useState<VisualizationType>('orb');
 
-  const ffmpegRef = useRef(new FFmpeg());
+  const ffmpegRef = useRef<FFmpeg | null>(null);
 
 
   const { toast } = useToast();
@@ -638,15 +638,23 @@ export default function AudioProcessor({
             const webmBlob = await renderVideo(renderedBuffer);
 
             setRenderMessage('Converting to MP4...');
+            
+            if (!ffmpegRef.current) {
+                ffmpegRef.current = new FFmpeg();
+            }
             const ffmpeg = ffmpegRef.current;
-            await ffmpeg.load({
-              coreURL: await toBlobURL('/ffmpeg/ffmpeg-core.js', 'text/javascript'),
-              wasmURL: await toBlobURL('/ffmpeg/ffmpeg-core.wasm', 'application/wasm'),
-            });
             
             ffmpeg.on('progress', ({ progress }) => {
               setRenderProgress(progress * 100);
             });
+            
+            if (!ffmpeg.loaded) {
+                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm'
+                await ffmpeg.load({
+                  coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                  wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                });
+            }
 
             await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
             await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'libx264', 'output.mp4']);
