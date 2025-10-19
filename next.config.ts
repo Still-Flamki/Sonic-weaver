@@ -38,7 +38,6 @@ const nextConfig: NextConfig = {
         };
     }
     
-    // This is the correct fix for the ffmpeg.wasm build error
     config.module.rules.push({
         test: /classes\.js$/,
         loader: 'string-replace-loader',
