@@ -166,8 +166,8 @@ export default function AudioProcessor({
         // "Dynamic & Deep": A complex path with pronounced gain and filter automation.
         const duration = 8;
         const x = radius * Math.sin((2 * Math.PI / duration) * time);
-        const z = radius * Math.sin((4 * Math.PI / duration) * time);
-        const y = Math.cos((2 * Math.PI / (duration * 2)) * time) * 0.5; 
+        const z = radius * Math.cos((2 * Math.PI / duration) * time); // Corrected to use cos for full front-back motion
+        const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
         path = { x, y, z };
         
         const distance = Math.sqrt(x * x + y * y + z * z);
@@ -488,7 +488,7 @@ export default function AudioProcessor({
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(url);
-        a.remove();
+a.remove();
         
         toast({
             title: 'Download Ready!',

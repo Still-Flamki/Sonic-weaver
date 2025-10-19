@@ -110,8 +110,8 @@ export default function AudioDemo() {
     // 11D: Figure-eight path with pronounced dynamics and filtering
     const duration = 8;
     const x = radius * Math.sin((2 * Math.PI / duration) * time);
-    const z = radius * Math.sin((4 * Math.PI / duration) * time); // Make z movement more pronounced
-    const y = Math.cos((2 * Math.PI / (duration * 2)) * time) * 0.5;
+    const z = radius * Math.cos((2 * Math.PI / duration) * time); // Corrected to use cos for full front-back motion
+    const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
     path = { x, y, z };
     
     // Gain automation based on distance from center.
