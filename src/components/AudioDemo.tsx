@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, RotateCw } from 'lucide-react';
+import { Play, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import Image from 'next/image';
@@ -14,9 +14,7 @@ let pannerNode: PannerNode | null = null;
 let gainNode: GainNode | null = null;
 
 export default function AudioDemo() {
-  const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [activePlayer, setActivePlayer] = useState<'before' | 'after' | null>(null);
   const buffer = useRef<AudioBuffer | null>(null);
   const animationFrameRef = useRef<number>();
@@ -27,45 +25,38 @@ export default function AudioDemo() {
     if (!audioContext) {
       try {
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        createDemoBuffer(audioContext);
       } catch (e) {
         console.error('Web Audio API is not supported in this browser.');
+        toast({
+            title: 'Audio Not Supported',
+            description: 'Your browser does not support the Web Audio API.',
+            variant: 'destructive',
+        });
       }
     }
 
     return () => {
       stopPreview();
-      audioContext?.close();
-      audioContext = null;
+      // Only close the context if this is the last component to use it.
+      // For this simple demo, it's okay, but in a larger app, you might manage context globally.
     };
-  }, []);
+  }, [toast]);
 
-  const loadDemoFile = async () => {
-    if (buffer.current || isLoading) return;
-
-    setIsLoading(true);
-    toast({ title: 'Loading Demo Track...' });
-
-    try {
-      const response = await fetch('/demo-track.mp3');
-      if (!response.ok) {
-        throw new Error('Demo track not found. Please add a `demo-track.mp3` file to the `public` folder.');
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      if (audioContext) {
-        buffer.current = await audioContext.decodeAudioData(arrayBuffer);
-        setIsReady(true);
-        toast({ title: 'Demo Ready!', description: 'Press play to hear the difference.' });
-      }
-    } catch (e: any) {
-      console.error('Failed to load demo audio:', e);
-      toast({
-        title: 'Error Loading Demo',
-        description: e.message || 'Could not load the demo audio file.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
+  const createDemoBuffer = (context: AudioContext) => {
+    const duration = 2; // seconds
+    const sampleRate = context.sampleRate;
+    const frameCount = sampleRate * duration;
+    const newBuffer = context.createBuffer(1, frameCount, sampleRate);
+    const data = newBuffer.getChannelData(0);
+    
+    // Create a simple sine wave tone
+    const frequency = 440; // A4 note
+    for (let i = 0; i < frameCount; i++) {
+        const time = i / sampleRate;
+        data[i] = Math.sin(2 * Math.PI * frequency * time) * 0.5; // * 0.5 to prevent clipping
     }
+    buffer.current = newBuffer;
   };
 
   const getAnimationPath = (time: number) => {
@@ -84,8 +75,8 @@ export default function AudioDemo() {
 
     const p = pannerNode;
     const g = gainNode;
-    p.connect(audioContext.destination);
     gainNode.connect(p);
+    p.connect(audioContext.destination);
 
     const startTime = audioContext.currentTime;
 
@@ -161,10 +152,6 @@ export default function AudioDemo() {
   };
 
   const togglePlay = (type: 'before' | 'after') => {
-    if (!isReady) {
-      loadDemoFile();
-      return;
-    }
     if (isPlaying && activePlayer === type) {
       stopPreview();
     } else {
@@ -176,10 +163,8 @@ export default function AudioDemo() {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
       <DemoPlayerCard
         title="Before"
-        description="Original Stereo Audio"
+        description="Original Mono Audio"
         isPlaying={isPlaying && activePlayer === 'before'}
-        isReady={isReady}
-        isLoading={isLoading}
         onTogglePlay={() => togglePlay('before')}
         coverImage={demoImage}
       />
@@ -187,8 +172,6 @@ export default function AudioDemo() {
         title="After"
         description="With 8D Spatial Effect"
         isPlaying={isPlaying && activePlayer === 'after'}
-        isReady={isReady}
-        isLoading={isLoading}
         onTogglePlay={() => togglePlay('after')}
         isEnhanced
         coverImage={demoImage}
@@ -201,8 +184,6 @@ interface DemoPlayerCardProps {
   title: string;
   description: string;
   isPlaying: boolean;
-  isReady: boolean;
-  isLoading: boolean;
   onTogglePlay: () => void;
   isEnhanced?: boolean;
   coverImage?: { imageUrl: string; description: string; imageHint: string };
@@ -212,8 +193,6 @@ function DemoPlayerCard({
   title,
   description,
   isPlaying,
-  isReady,
-  isLoading,
   onTogglePlay,
   isEnhanced,
   coverImage,
@@ -239,12 +218,8 @@ function DemoPlayerCard({
             <div className={`absolute inset-0 rounded-lg ${isEnhanced ? 'border-4 border-primary' : 'border-2 border-input'}`}></div>
         </div>
         <Button onClick={onTogglePlay} size="lg" variant={isEnhanced ? 'default' : 'outline'} className="w-48">
-          {isLoading ? (
-            <RotateCw className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Icon className="mr-2 h-5 w-5" />
-          )}
-          {isLoading ? 'Loading...' : isPlaying ? 'Pause' : isReady ? 'Play' : 'Load Demo'}
+          <Icon className="mr-2 h-5 w-5" />
+          {isPlaying ? 'Pause' : 'Play'}
         </Button>
       </CardContent>
     </Card>
