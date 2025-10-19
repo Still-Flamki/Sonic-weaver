@@ -7,21 +7,10 @@ interface AudioVisualizerProps {
   isPlaying: boolean;
 }
 
-type Particle = {
-  x: number;
-  y: number;
-  size: number;
-  velocityX: number;
-  velocityY: number;
-  color: string;
-  life: number;
-};
-
 // Main component
 export default function AudioVisualizer({ analyserNode, isPlaying }: AudioVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
-  const particlesRef = useRef<Particle[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -35,10 +24,11 @@ export default function AudioVisualizer({ analyserNode, isPlaying }: AudioVisual
     const canvasCtx = canvas.getContext('2d');
     if(!canvasCtx) return;
 
+    // Use a smaller FFT size for a smoother, less detailed waveform, which looks more artistic
+    analyserNode.fftSize = 512;
     const bufferLength = analyserNode.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     
-    // Set canvas dimensions
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
@@ -47,81 +37,75 @@ export default function AudioVisualizer({ analyserNode, isPlaying }: AudioVisual
     
     const width = canvas.width / dpr;
     const height = canvas.height / dpr;
+    const centerX = width / 2;
+    const centerY = height / 2;
 
-    const primaryColor = { r: 59, g: 130, b: 246 }; // Blue
-    const accentColor = { r: 16, g: 185, b: 129 }; // Green
-
-    const createParticle = (x: number, y: number, size: number, color: string) => {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 2 + 1;
-        return {
-            x,
-            y,
-            size: Math.max(1, size),
-            velocityX: Math.cos(angle) * speed * 0.5,
-            velocityY: Math.sin(angle) * speed * 0.5,
-            color,
-            life: 1, // 1 = full life, 0 = dead
-        };
-    };
+    const primaryColor = 'rgba(59, 130, 246, 0.7)'; // Blue
+    const accentColor = 'rgba(16, 185, 129, 0.9)'; // Green
+    const highlightColor = 'rgba(230, 240, 255, 1)'; // Whiteish
 
     const draw = () => {
       animationFrameRef.current = requestAnimationFrame(draw);
-      analyserNode.getByteFrequencyData(dataArray);
+      
+      // Use getByteTimeDomainData for waveform visualization
+      analyserNode.getByteTimeDomainData(dataArray);
 
-      // Semi-transparent background for a trailing effect
-      canvasCtx.fillStyle = 'rgba(10, 18, 28, 0.2)';
+      canvasCtx.fillStyle = 'rgba(10, 18, 28, 0.2)'; // Faded background for motion blur
       canvasCtx.fillRect(0, 0, width, height);
       
-      const centerX = width / 2;
-      const centerY = height / 2;
+      // Calculate overall volume for core pulse and color intensity
+      let volume = dataArray.reduce((sum, value) => sum + Math.abs(value - 128), 0) / bufferLength;
+      const coreSize = 5 + volume * 1.5;
+      const intensity = Math.min(1, volume / 50); // Normalize intensity
 
-      // Create a glowing core
-      const coreGradient = canvasCtx.createRadialGradient(centerX, centerY, 10, centerX, centerY, width * 0.4);
-      coreGradient.addColorStop(0, 'rgba(59, 130, 246, 0.1)');
+      // Draw the central glowing orb
+      const coreGradient = canvasCtx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreSize * 2);
+      coreGradient.addColorStop(0, `rgba(150, 180, 255, ${0.2 + intensity * 0.4})`);
       coreGradient.addColorStop(1, 'rgba(10, 18, 28, 0)');
       canvasCtx.fillStyle = coreGradient;
       canvasCtx.fillRect(0, 0, width, height);
-
-      // Analyze bass and treble
-      const bass = dataArray.slice(0, 5).reduce((a, b) => a + b) / 5; // ~0-60Hz
-      const treble = dataArray.slice(100, bufferLength).reduce((a, b) => a + b) / (bufferLength-100);
-
-      // Create particles based on bass
-      if (bass > 180 && particlesRef.current.length < 200) {
-        for (let i = 0; i < Math.floor((bass - 180) / 20); i++) {
-          const colorLerp = Math.min(1, treble / 100);
-          const r = (1 - colorLerp) * primaryColor.r + colorLerp * accentColor.r;
-          const g = (1 - colorLerp) * primaryColor.g + colorLerp * accentColor.g;
-          const b = (1 - colorLerp) * primaryColor.b + colorLerp * accentColor.b;
-          const color = `rgb(${r}, ${g}, ${b})`;
-
-          particlesRef.current.push(createParticle(centerX, centerY, bass / 50, color));
-        }
-      }
-
-      // Update and draw particles
-      particlesRef.current = particlesRef.current.filter(p => p.life > 0.01);
       
-      particlesRef.current.forEach(p => {
-        p.life -= 0.01;
-        p.x += p.velocityX;
-        p.y += p.velocityY;
-        p.size *= 0.98;
+      canvasCtx.beginPath();
+      canvasCtx.arc(centerX, centerY, coreSize, 0, 2 * Math.PI);
+      canvasCtx.fillStyle = `rgba(200, 220, 255, ${0.5 + intensity * 0.5})`;
+      canvasCtx.fill();
 
-        const bassBoost = Math.max(1, bass / 128);
-        const distanceToCenter = Math.hypot(p.x - centerX, p.y - centerY);
-        if(distanceToCenter > 1) {
-            const angleFromCenter = Math.atan2(p.y - centerY, p.x - centerX);
-            p.velocityX += Math.cos(angleFromCenter) * bassBoost * 0.01;
-            p.velocityY += Math.sin(angleFromCenter) * bassBoost * 0.01;
-        }
 
+      canvasCtx.lineWidth = 2 + intensity * 2;
+      
+      const numLines = 6; // Create 6 symmetrical lines
+      for (let j = 0; j < numLines; j++) {
         canvasCtx.beginPath();
-        canvasCtx.arc(p.x, p.y, Math.max(0.1, p.size * p.life), 0, Math.PI * 2);
-        canvasCtx.fillStyle = p.color.replace(')', `, ${p.life})`).replace('rgb', 'rgba');
-        canvasCtx.fill();
-      });
+        const rotation = (j / numLines) * Math.PI * 2;
+        
+        // Interpolate color based on intensity
+        const r = 59 * (1 - intensity) + 16 * intensity;
+        const g = 130 * (1 - intensity) + 185 * intensity;
+        const b = 246 * (1 - intensity) + 129 * intensity;
+        const colorLerp = `rgba(${r}, ${g}, ${b}, 0.6)`;
+        const finalColor = intensity > 0.8 ? highlightColor : colorLerp;
+
+        canvasCtx.strokeStyle = finalColor;
+        
+        let moved = false;
+        for (let i = 0; i < bufferLength; i++) {
+          const v = dataArray[i] / 128.0; // Normalize to 0-2 range
+          const y = (v - 1) * height * 0.3; // Waveform amplitude
+          const x = i * (width / 2) / bufferLength;
+
+          // Rotate the point
+          const rotatedX = x * Math.cos(rotation) - y * Math.sin(rotation);
+          const rotatedY = x * Math.sin(rotation) + y * Math.cos(rotation);
+          
+          if (!moved) {
+            canvasCtx.moveTo(centerX + rotatedX, centerY + rotatedY);
+            moved = true;
+          } else {
+            canvasCtx.lineTo(centerX + rotatedX, centerY + rotatedY);
+          }
+        }
+        canvasCtx.stroke();
+      }
     };
 
     draw();
@@ -130,7 +114,6 @@ export default function AudioVisualizer({ analyserNode, isPlaying }: AudioVisual
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-      particlesRef.current = [];
     };
   }, [analyserNode, isPlaying]);
 
