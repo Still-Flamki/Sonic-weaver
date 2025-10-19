@@ -27,6 +27,9 @@ let filterNode: BiquadFilterNode | null = null;
 let gainNode: GainNode | null = null;
 let convolverNode: ConvolverNode | null = null;
 let compressorNode: DynamicsCompressorNode | null = null;
+let dryNode: GainNode | null = null;
+let wetNode: GainNode | null = null;
+
 
 export default function AudioProcessor({
   effectType,
@@ -68,6 +71,13 @@ export default function AudioProcessor({
       stopPreview();
     };
   }, []);
+  
+  useEffect(() => {
+    if (isPlaying && effectType === 'Custom' && wetNode && dryNode) {
+      wetNode.gain.value = customReverb;
+      dryNode.gain.value = 1 - customReverb;
+    }
+  }, [customReverb, isPlaying, effectType]);
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -154,19 +164,17 @@ export default function AudioProcessor({
 
     switch (currentEffect) {
       case '4D': {
-        const d = 6;
         path = {
-          x: 1.5 * radius * Math.cos(time * (Math.PI / d)),
+          x: radius * Math.sin(time * (Math.PI / 6)),
           y: 0,
-          z: -1.5 * radius * Math.sin(time * (Math.PI / d) * 0.5),
+          z: -radius * Math.cos(time * (Math.PI / 6)),
         };
         gain = 1.0;
         freq = 22050;
         break;
       }
       case '8D': {
-        const d = 8;
-        const angle = (2 * Math.PI / d) * time;
+        const angle = (2 * Math.PI / 8) * time;
         path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
         gain = 1.0;
         freq = 22050;
@@ -175,7 +183,7 @@ export default function AudioProcessor({
       case '11D':
       case 'Custom': { // Custom uses 11D path with different parameters
         const x = radius * Math.sin((2 * Math.PI / duration) * time);
-        const z = radius * Math.cos((2 * Math.PI / duration) * time);
+        const z = radius * Math.cos((2 * Math.PI / duration) * time); // This now goes from -radius to +radius
         const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
         path = { x, y, z };
         
@@ -208,6 +216,8 @@ export default function AudioProcessor({
     // Clear previous connections
     g.disconnect();
     if (convolverNode) convolverNode.disconnect();
+    if (dryNode) dryNode.disconnect();
+    if (wetNode) wetNode.disconnect();
     
     const shouldUseReverb = effectType === '11D' || effectType === 'Custom';
     const reverbAmount = effectType === 'Custom' ? customReverb : 0.25;
@@ -217,10 +227,10 @@ export default function AudioProcessor({
             convolverNode = audioContext.createConvolver();
             convolverNode.buffer = await createReverbImpulseResponse(audioContext);
         }
+        if (!dryNode) dryNode = audioContext.createGain();
+        if (!wetNode) wetNode = audioContext.createGain();
         
-        const dryNode = audioContext.createGain();
         dryNode.gain.value = 1 - reverbAmount;
-        const wetNode = audioContext.createGain();
         wetNode.gain.value = reverbAmount;
 
         gainNode.connect(dryNode);
@@ -263,7 +273,10 @@ export default function AudioProcessor({
   const playPreview = async () => {
     if (!decodedBuffer || !audioContext || !compressorNode) return;
     
-    stopPreview();
+    if (isPlaying) {
+      stopPreview();
+    }
+
 
     await audioContext.resume();
 
@@ -318,6 +331,9 @@ export default function AudioProcessor({
     filterNode?.disconnect();
     pannerNode?.disconnect();
     convolverNode?.disconnect();
+    dryNode?.disconnect();
+    wetNode?.disconnect();
+
     
     setIsPlaying(false);
   };
@@ -518,7 +534,7 @@ a.remove();
         });
     } finally {
         setIsRendering(false);
-        if (wasPlaying) {
+        if (wasPlaying && decodedBuffer) {
           playPreview();
         }
     }
@@ -527,9 +543,10 @@ a.remove();
   const isBusy = isDecoding || isRendering;
 
   const handleEffectChange = (value: EffectType) => {
-      stopPreview();
       setEffectType(value);
-      if (decodedBuffer && !isBusy) {
+      if (isPlaying) {
+        // Effect change during playback, re-initialize animation
+        stopPreview();
         setTimeout(() => playPreview(), 50);
       }
   }
@@ -600,12 +617,12 @@ a.remove();
                   )}
                 >
                   <RadioGroupItem value={effect} id={`effect-${effect}`} className="sr-only" />
-                  <div className="flex flex-col items-center gap-2">
-                    <div className={cn(
-                        "h-2 w-2 rounded-full bg-red-500/50 transition-all",
-                        effectType === effect ? "bg-red-500 shadow-[0_0_4px_1px] shadow-red-500" : ""
-                    )}></div>
-                    <span className="text-lg font-semibold font-headline">{effect}</span>
+                  <div className="flex flex-col items-center gap-2 text-center">
+                      <div className={cn(
+                          "h-2 w-2 rounded-full bg-red-500/50 transition-all",
+                          effectType === effect ? "bg-red-500 shadow-[0_0_4px_1px] shadow-red-500" : ""
+                      )}></div>
+                      <span className="text-lg font-semibold font-headline">{effect}</span>
                   </div>
                   <span className="text-xs text-muted-foreground mt-1">Audio</span>
                 </Label>
@@ -617,7 +634,7 @@ a.remove();
           <Card className="bg-background/30 border-primary/20">
             <CardHeader>
                 <CardTitle className="font-headline text-xl tracking-tight">Custom Controls</CardTitle>
-                <CardDescription>Fine-tune the audio effect parameters.</CardDescription>
+                <CardDescription>Fine-tune the audio effect parameters in real-time.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 pt-2">
                 <div className="grid gap-2">
@@ -626,12 +643,8 @@ a.remove();
                         id="speed-slider"
                         min={1} max={15}
                         value={[customSpeed]}
-                        onValueChange={(val) => {
-                            stopPreview();
-                            setCustomSpeed(val[0]);
-                            setTimeout(() => playPreview(), 50);
-                        }}
-                        disabled={isBusy}
+                        onValueChange={(val) => setCustomSpeed(val[0])}
+                        disabled={isBusy || !isPlaying}
                     />
                      <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Slow</span>
@@ -644,12 +657,8 @@ a.remove();
                         id="width-slider"
                         min={1} max={10}
                         value={[customWidth]}
-                        onValueChange={(val) => {
-                            stopPreview();
-                            setCustomWidth(val[0]);
-                            setTimeout(() => playPreview(), 50);
-                        }}
-                        disabled={isBusy}
+                        onValueChange={(val) => setCustomWidth(val[0])}
+                        disabled={isBusy || !isPlaying}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Narrow</span>
@@ -662,12 +671,8 @@ a.remove();
                         id="reverb-slider"
                         min={0} max={1} step={0.05}
                         value={[customReverb]}
-                        onValueChange={(val) => {
-                            stopPreview();
-                            setCustomReverb(val[0]);
-                            setTimeout(() => playPreview(), 50);
-                        }}
-                        disabled={isBusy}
+                        onValueChange={(val) => setCustomReverb(val[0])}
+                        disabled={isBusy || !isPlaying}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Dry</span>
@@ -712,3 +717,5 @@ a.remove();
     </Card>
   );
 }
+
+    
