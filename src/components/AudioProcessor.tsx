@@ -154,13 +154,11 @@ export default function AudioProcessor({
         break;
       }
       case '8D': {
-        // "Immersive Orbit": A perfect circle with subtle realism.
+        // "Immersive Orbit": A perfect circle at constant speed.
         const duration = 8;
         const angle = (2 * Math.PI / duration) * time;
         path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
-        
-        const zNormalized = (path.z + radius) / (2 * radius);
-        gain = 0.8 + zNormalized * 0.2; 
+        gain = 1.0; // Constant gain for constant perceived speed
         freq = 22050;
         break;
       }
