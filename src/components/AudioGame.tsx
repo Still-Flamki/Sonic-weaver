@@ -6,8 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Play, Volume2, CheckCircle, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 type SoundLocation = 'Front Left' | 'Front Right' | 'Back Left' | 'Back Right';
 
@@ -31,8 +29,6 @@ export default function AudioGame() {
   const [feedback, setFeedback] = useState<{ correct: boolean; guess: SoundLocation } | null>(null);
 
   const { toast } = useToast();
-  const gameImage = PlaceHolderImages.find(p => p.id === 'audio-game-bg');
-
 
   const initializeAudio = useCallback(() => {
     if (!audioContext) {
@@ -138,17 +134,6 @@ export default function AudioGame() {
   return (
     <div className="max-w-4xl mx-auto">
       <Card className="relative shadow-lg bg-card/50 backdrop-blur-sm border-accent/20 shadow-accent/10 overflow-hidden">
-        {gameImage && (
-            <Image
-                src={gameImage.imageUrl}
-                alt={gameImage.description}
-                fill
-                className="object-cover"
-                data-ai-hint={gameImage.imageHint}
-            />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/50"></div>
-        
         <div className="relative flex flex-col justify-center items-center text-center p-8 md:p-10 min-h-[500px]">
             <div className="w-full">
               <CardTitle className="font-headline text-2xl tracking-tight mb-2">
