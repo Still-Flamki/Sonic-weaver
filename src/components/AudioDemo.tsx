@@ -69,25 +69,31 @@ export default function AudioDemo() {
   const createDemoBuffer = (context: AudioContext) => {
     const sampleRate = context.sampleRate;
     const tempo = 140; 
-    const noteDuration = 60 / tempo; 
-    const totalDuration = noteDuration * 8; 
+    const noteDuration = 60 / tempo / 2; // 16th notes
+    const totalDuration = noteDuration * 16; 
     
     const frameCount = sampleRate * totalDuration;
     const newBuffer = context.createBuffer(1, frameCount, sampleRate);
     const data = newBuffer.getChannelData(0);
 
-    const notes = [
-      261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 261.63, 196.00
+    const CMinorScale = [261.63, 293.66, 311.13, 349.23, 392.00, 415.30, 466.16];
+    const arpeggio = [
+        CMinorScale[0], CMinorScale[2], CMinorScale[4], CMinorScale[6],
+        CMinorScale[5], CMinorScale[3], CMinorScale[1], CMinorScale[0],
+        CMinorScale[1], CMinorScale[3], CMinorScale[5], CMinorScale[2],
+        CMinorScale[4], CMinorScale[6], CMinorScale[3], CMinorScale[0],
     ];
 
-    for (let i = 0; i < notes.length; i++) {
-      const freq = notes[i];
+    for (let i = 0; i < arpeggio.length; i++) {
+      const freq = arpeggio[i];
       const startSample = Math.floor(i * noteDuration * sampleRate);
-      const endSample = Math.floor((i + 1) * noteDuration * sampleRate);
+      const endSample = Math.floor((i + 0.9) * noteDuration * sampleRate); // Add slight gap
       for (let j = startSample; j < endSample; j++) {
         const time = (j - startSample) / sampleRate;
-        const envelope = 1 - (j - startSample) / (endSample - startSample);
-        data[j] = Math.sin(2 * Math.PI * freq * time) * 0.4 * envelope;
+        const envelope = 1 - (time / noteDuration); // Simple decay
+        const sine = Math.sin(2 * Math.PI * freq * time);
+        const overtone = Math.sin(2 * Math.PI * freq * 2 * time) * 0.3; // Add a harmonic
+        data[j] = (sine + overtone) * 0.25 * envelope;
       }
     }
     
@@ -121,16 +127,17 @@ export default function AudioDemo() {
     const path = { x, y, z };
     
     const distance = Math.sqrt(x * x + y * y + z * z);
-    const minGain = 0.4;
-    const maxGain = 0.8;
-    const proximityThreshold = 1.2;
-    const steepness = 2; 
-
-    let gain = maxGain;
+    
+    // Non-linear gain reduction for proximity
+    const proximityThreshold = 1.5; // How close before volume reduction starts
+    const steepness = 2.0; // How sharply the volume drops
+    let proximityGain = 1.0;
     if (distance < proximityThreshold) {
-      const proximityFactor = Math.pow(distance / proximityThreshold, steepness);
-      gain = minGain + (maxGain - minGain) * proximityFactor;
+        proximityGain = Math.pow(distance / proximityThreshold, steepness);
     }
+    
+    const baseGain = 0.7;
+    const gain = baseGain * proximityGain;
     
     const baseFreq = 2500;
     const freqRange = 15000;
@@ -277,7 +284,7 @@ export default function AudioDemo() {
             {isEnhanced ? "11D Effect with Reverb" : "Original Mono Audio"}
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            A simple melody to demonstrate the effect.
+            A simple generative melody to demonstrate the effect.
           </p>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center gap-6 pt-4 pb-8">
