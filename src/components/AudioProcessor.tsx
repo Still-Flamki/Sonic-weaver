@@ -56,7 +56,6 @@ export default function AudioProcessor({
   const [error, setError] = useState<string | null>(null);
   const animationFrameRef = useRef<number>();
   const visualizerCanvasRef = useRef<HTMLCanvasElement>(null);
-  const conversionWorkerRef = useRef<Worker | null>(null);
   
   const [customSpeed, setCustomSpeed] = useState(8);
   const [customWidth, setCustomWidth] = useState(3);
@@ -69,39 +68,7 @@ export default function AudioProcessor({
 
 
   const { toast } = useToast();
-
-  useEffect(() => {
-    // Initialize the conversion worker
-    const worker = new Worker(new URL('@/workers/converter.worker.ts', import.meta.url));
-    conversionWorkerRef.current = worker;
-
-    conversionWorkerRef.current.onmessage = (event) => {
-        const { type, data, error: workerError, progress } = event.data;
-
-        if (type === 'conversion-complete') {
-            const mp4Blob = new Blob([data], { type: 'video/mp4' });
-            downloadFile(mp4Blob, 'video', 'mp4');
-            setIsRendering(false);
-        } else if (type === 'conversion-error') {
-            console.error('Conversion worker error:', workerError);
-            setError(`Failed to convert video to MP4. ${workerError}`);
-            toast({
-                title: 'Conversion Failed',
-                description: `Could not convert video to MP4.`,
-                variant: 'destructive',
-            });
-            setIsRendering(false);
-        } else if (type === 'conversion-progress') {
-            setRenderMessage('Converting to MP4...');
-            setRenderProgress(progress * 100);
-        }
-    };
-    
-    return () => {
-        conversionWorkerRef.current?.terminate();
-    };
-  }, []);
-
+  
   useEffect(() => {
     if (!audioContext) {
       try {
@@ -524,7 +491,7 @@ export default function AudioProcessor({
     return new Blob([bufferArray], { type: 'audio/wav' });
   }
 
-  const downloadFile = (blob: Blob, fileType: 'audio' | 'video', extension: 'wav' | 'webm' | 'mp4') => {
+  const downloadFile = (blob: Blob, fileType: 'audio' | 'video', extension: 'wav' | 'webm') => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.style.display = 'none';
@@ -541,7 +508,7 @@ export default function AudioProcessor({
     });
   }
 
-  const renderVideo = (renderedBuffer: AudioBuffer) => {
+  const renderVideo = async (renderedBuffer: AudioBuffer): Promise<Blob> => {
     return new Promise<Blob>((resolve, reject) => {
         const canvas = visualizerCanvasRef.current;
         if (!canvas) {
@@ -569,7 +536,7 @@ export default function AudioProcessor({
             audioStream.getAudioTracks()[0],
         ]);
 
-        const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+        const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm; codecs=vp9,opus' });
         const chunks: Blob[] = [];
         
         recorder.ondataavailable = (e) => {
@@ -684,22 +651,11 @@ export default function AudioProcessor({
         if (fileType === 'video') {
             setRenderMessage('Capturing video...');
             const videoBlob = await renderVideo(renderedBuffer);
-
-            if (conversionWorkerRef.current) {
-                setRenderMessage('Sending to converter...');
-                const arrayBuffer = await videoBlob.arrayBuffer();
-                conversionWorkerRef.current.postMessage({
-                    type: 'convert',
-                    data: arrayBuffer,
-                }, [arrayBuffer]);
-            } else {
-                throw new Error("Conversion worker is not available.");
-            }
+            downloadFile(videoBlob, 'video', 'webm');
 
         } else {
             const wavBlob = bufferToWav(renderedBuffer);
             downloadFile(wavBlob, 'audio', 'wav');
-            setIsRendering(false);
         }
 
     } catch (e) {
@@ -711,13 +667,9 @@ export default function AudioProcessor({
             description: `Could not process the ${fileType}. See console for details.`,
             variant: 'destructive',
         });
-        setIsRendering(false);
     } finally {
-        // Reset state, but only if we aren't converting
-        if (fileType === 'audio') {
-            setIsRendering(false);
-            setRenderProgress(0);
-        }
+        setIsRendering(false);
+        setRenderProgress(0);
         if (wasPlaying && decodedBuffer) {
           playPreview();
         }
@@ -978,7 +930,7 @@ export default function AudioProcessor({
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleDownload('video')}>
                     <Video className="mr-2 h-4 w-4" />
-                    <span>Video (.mp4)</span>
+                    <span>Video with Visualizer (.webm)</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
