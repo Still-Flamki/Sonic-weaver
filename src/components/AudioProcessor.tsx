@@ -129,17 +129,20 @@ export default function AudioProcessor({
     const zRadius = radius * 1.5;
     let duration: number;
     let path: { x: number; y: number; z: number };
+    let maxDistance: number;
 
     switch (effectType) {
       case '4D':
         duration = 4; // Clean right-to-left sweep
         const angle4d = (time / duration) * Math.PI;
         path = { x: Math.cos(angle4d) * radius, y: 0, z: -1 };
+        maxDistance = Math.sqrt(radius * radius + 1);
         break;
       case '8D':
         duration = 8; // Professional circular path
         const angle8d = (time / duration) * 2 * Math.PI;
         path = { x: Math.sin(angle8d) * radius, y: 0, z: Math.cos(angle8d) * radius };
+        maxDistance = radius;
         break;
       case '11D':
         duration = 8; // Right -> Front -> Left -> Back -> Loop
@@ -169,13 +172,16 @@ export default function AudioProcessor({
             break;
         }
         path = { x, y, z };
+        maxDistance = radius * 1.81; // Approximate max distance for this path
         break;
       default:
         path = { x: 0, y: 0, z: 0 };
+        maxDistance = 1;
     }
     
     const distance = Math.sqrt(path.x*path.x + path.y*path.y + path.z*path.z);
-    const gain = 1 - (distance / (radius * 2));
+    const normalizedDistance = Math.min(distance / maxDistance, 1);
+    const gain = Math.cos(normalizedDistance * Math.PI / 2); // Smoother falloff
     const freq = path.z > 0 ? 3000 + (path.z / zRadius) * 2000 : 5000 - (Math.abs(path.z) / zRadius) * 2000;
 
     return { ...path, gain, freq };

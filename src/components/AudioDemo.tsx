@@ -123,7 +123,9 @@ export default function AudioDemo() {
     const path = { x, y, z };
 
     const distance = Math.sqrt(path.x*path.x + path.y*path.y + path.z*path.z);
-    const gain = 1 - (distance / (radius * 2));
+    const maxDistance = radius * 1.81; // Approximate max distance in the 11D path
+    const normalizedDistance = Math.min(distance / maxDistance, 1);
+    const gain = Math.cos(normalizedDistance * Math.PI / 2); // Smoother falloff
     
     const freq = z > 0 ? 3000 + (z / zRadius) * 2000 : 5000 - (Math.abs(z) / zRadius) * 2000;
 
@@ -177,7 +179,7 @@ export default function AudioDemo() {
       p.positionY.linearRampToValueAtTime(y, audioContext.currentTime + 0.05);
       p.positionZ.linearRampToValueAtTime(z, audioContext.currentTime + 0.05);
       f.frequency.linearRampToValueAtTime(freq, audioContext.currentTime + 0.05);
-      g.gain.linearRampToValueAtTime(Math.max(0.3, newGain), audioContext.currentTime + 0.05);
+      g.gain.linearRampToValueAtTime(newGain, audioContext.currentTime + 0.05);
 
       animationFrameRef.current = requestAnimationFrame(animate);
     };
