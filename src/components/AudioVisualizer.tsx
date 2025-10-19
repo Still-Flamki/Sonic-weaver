@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, forwardRef } from 'react';
 
-export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'fabric' | 'skyline' | 'chromatic' | 'kaleidoscope' | 'bloom';
+export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'fabric' | 'skyline' | 'chromatic' | 'bloom' | 'genesis';
 
 interface AudioVisualizerProps {
   analyserNode: AnalyserNode | null;
@@ -220,7 +220,7 @@ const drawFabric = (
     analyser.getByteFrequencyData(freqData);
     analyser.getByteTimeDomainData(dataArray);
 
-    ctx.fillStyle = 'rgba(10, 18, 28, 0.35)'; // Dark background with more fade
+    ctx.fillStyle = 'rgba(10, 18, 28, 0.35)';
     ctx.fillRect(0, 0, width, height);
 
     const bass = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
@@ -281,10 +281,9 @@ const drawFabric = (
         if (p.y < 0) p.y = height;
         if (p.y > height) p.y = 0;
         
-        // Draw with new color scheme
-        const r = 150 + Math.floor(treble * 105); // Shift towards yellow/white on treble
+        const r = 150 + Math.floor(treble * 105);
         const g = 50 + Math.floor(treble * 205);
-        const b = 150 - Math.floor(treble * 50); // Reduce blue on treble
+        const b = 150 - Math.floor(treble * 50);
         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${p.life * 0.8})`;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -410,7 +409,7 @@ const drawChromatic = (
     ctx.globalCompositeOperation = 'source-over'; // Reset composite operation
   };
 
-  const drawKaleidoscope = (
+  const drawGenesis = (
     ctx: CanvasRenderingContext2D,
     analyser: AnalyserNode,
     dataArray: Uint8Array,
@@ -422,45 +421,60 @@ const drawChromatic = (
     const freqData = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteFrequencyData(freqData);
 
-    ctx.fillStyle = 'rgba(10, 18, 28, 0.2)';
+    // --- Background & Gravity Warp ---
+    const subBass = freqData.slice(0, 2).reduce((s, v) => s + v, 0) / 2 / 255;
+    const warpFactor = 1.0 + subBass * 0.05;
+    ctx.save();
+    ctx.translate(width / 2, height / 2);
+    ctx.scale(warpFactor, warpFactor);
+    ctx.translate(-width / 2, -height / 2);
+    ctx.fillStyle = 'rgba(10, 18, 28, 0.3)';
     ctx.fillRect(0, 0, width, height);
+    
+    // --- Particle Field ---
+    drawFabric(ctx, analyser, dataArray, width, height, time);
 
-    const bufferLength = dataArray.length;
+    // --- Central Orb ---
     const centerX = width / 2;
     const centerY = height / 2;
+    const bass = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
+    const mids = freqData.slice(10, 50).reduce((s, v) => s + v, 0) / 40 / 255;
+    
+    const coreSize = 10 + bass * 40;
 
-    const bassAvg = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
-    const midAvg = freqData.slice(10, 30).reduce((s, v) => s + v, 0) / 20 / 255;
-    const trebleAvg = freqData.slice(50, 100).reduce((s, v) => s + v, 0) / 50 / 255;
+    // Outer corona
+    const coronaGradient = ctx.createRadialGradient(centerX, centerY, coreSize * 0.8, centerX, centerY, coreSize * 2.5);
+    coronaGradient.addColorStop(0, `rgba(255, 180, 80, ${mids * 0.2})`);
+    coronaGradient.addColorStop(1, 'rgba(10, 18, 28, 0)');
+    ctx.fillStyle = coronaGradient;
+    ctx.fillRect(0, 0, width, height);
+    
+    // Inner core
+    const coreGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreSize);
+    coreGradient.addColorStop(0, `rgba(255, 255, 220, ${0.5 + bass * 0.5})`);
+    coreGradient.addColorStop(0.5, `rgba(255, 200, 100, ${0.3 + bass * 0.4})`);
+    coreGradient.addColorStop(1, `rgba(255, 100, 0, ${bass * 0.5})`);
+    ctx.fillStyle = coreGradient;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, coreSize, 0, 2 * Math.PI);
+    ctx.fill();
 
-    const slices = 4 + Math.floor(bassAvg * 8);
-    const angleIncrement = (Math.PI * 2) / slices;
-
-    const rotation = time * 0.0001;
-    const zoom = 1 + bassAvg * 0.5;
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.scale(zoom, zoom);
-    ctx.rotate(rotation);
-
-    for (let k = 0; k < slices; k++) {
+    // --- Waveform Solar Flares ---
+    ctx.lineWidth = 1.5 + mids * 2;
+    const bufferLength = dataArray.length;
+    const numFlares = 4;
+    for (let j = 0; j < numFlares; j++) {
         ctx.beginPath();
+        const rotation = (j / numFlares) * Math.PI * 2 + (time * 0.00005);
         let moved = false;
-
-        const sliceAngle = k * angleIncrement;
-        ctx.save();
-        ctx.rotate(sliceAngle);
-        // Flip every other slice for a true kaleidoscope effect
-        if (k % 2 === 1) {
-            ctx.scale(1, -1);
-        }
-
-        for (let i = 0; i < bufferLength; i += 8) {
+        for (let i = 0; i < bufferLength; i += 4) {
             const v = dataArray[i] / 128.0; // 0-2
-            const y = (v - 1) * (height * 0.1); // -1 to 1
-            const x = (i / bufferLength) * (width * 0.25);
-            
+            const arcRadius = coreSize + (v - 1) * (height * 0.1) * mids;
+            const angle = (i / bufferLength) * Math.PI * 1.5 - Math.PI / 4;
+
+            const x = centerX + arcRadius * Math.cos(angle + rotation);
+            const y = centerY + arcRadius * Math.sin(angle + rotation);
+
             if (!moved) {
                 ctx.moveTo(x, y);
                 moved = true;
@@ -468,19 +482,11 @@ const drawChromatic = (
                 ctx.lineTo(x, y);
             }
         }
-        
-        const r = 50 + Math.floor(trebleAvg * 205);
-        const g = 50 + Math.floor(midAvg * 205);
-        const b = 120 + Math.floor(bassAvg * 135);
-        const alpha = 0.3 + (bassAvg + midAvg + trebleAvg) / 3 * 0.7;
-
-        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-        ctx.lineWidth = 1 + bassAvg * 3;
+        const flareColor = `rgba(255, 220, 180, ${0.2 + mids * 0.6})`;
+        ctx.strokeStyle = flareColor;
         ctx.stroke();
-
-        ctx.restore();
     }
-    ctx.restore();
+    ctx.restore(); // Restore from gravity warp
 };
 
 const drawBloom = (
@@ -597,7 +603,7 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     if(!canvasCtx) return;
 
     // Different visualizers prefer different data
-    if (['orb', 'kaleidoscope', 'fabric', 'bloom'].includes(visualizationType)) {
+    if (['orb', 'fabric', 'bloom', 'genesis'].includes(visualizationType)) {
         analyserNode.fftSize = 1024;
     } else { // bars, tunnel, skyline, chromatic
         analyserNode.fftSize = 256;
@@ -642,8 +648,8 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
         case 'chromatic':
             drawChromatic(canvasCtx, analyserNode, dataArray, width, height);
             break;
-        case 'kaleidoscope':
-            drawKaleidoscope(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
+        case 'genesis':
+            drawGenesis(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
             break;
         case 'bloom':
             drawBloom(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);

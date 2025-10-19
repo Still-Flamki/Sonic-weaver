@@ -61,7 +61,7 @@ export default function AudioProcessor({
   const [customMid, setCustomMid] = useState(0);
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
-  const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
+  const [visualizationType, setVisualizationType] = useState<VisualizationType>('genesis');
 
 
   const { toast } = useToast();
@@ -497,7 +497,7 @@ export default function AudioProcessor({
     document.body.appendChild(a);
     a.click();
     URL.revokeObjectURL(url);
-    a.remove();
+a.remove();
 
      toast({
         title: 'Download Ready!',
@@ -810,9 +810,9 @@ export default function AudioProcessor({
                         <SelectValue placeholder="Select a visualization" />
                     </SelectTrigger>
                     <SelectContent>
+                        <SelectItem value="genesis">Genesis Orb</SelectItem>
                         <SelectItem value="fabric">Quantum Fabric</SelectItem>
                         <SelectItem value="bloom">Fractal Bloom</SelectItem>
-                        <SelectItem value="kaleidoscope">Kaleidoscopic Echoes</SelectItem>
                         <SelectItem value="chromatic">Chromatic Aberration</SelectItem>
                         <SelectItem value="skyline">Neon Skyline</SelectItem>
                         <SelectItem value="tunnel">Warp Tunnel</SelectItem>
