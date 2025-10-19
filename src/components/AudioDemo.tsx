@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Play, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PlaceHolderImages, ImagePlaceholder } from '@/lib/placeholder-images';
+import Image from 'next/image';
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -12,6 +14,7 @@ let pannerNode: PannerNode | null = null;
 let gainNode: GainNode | null = null;
 let filterNode: BiquadFilterNode | null = null;
 let convolverNode: ConvolverNode | null = null;
+let compressorNode: DynamicsCompressorNode | null = null;
 
 export default function AudioDemo() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -20,10 +23,23 @@ export default function AudioDemo() {
   const animationFrameRef = useRef<number>();
   const { toast } = useToast();
 
+  const beforeImage = PlaceHolderImages.find(p => p.id === 'demo-cover-before');
+  const afterImage = PlaceHolderImages.find(p => p.id === 'demo-cover-after');
+
+
   useEffect(() => {
     if (!audioContext) {
       try {
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        // Set up mastering compressor
+        compressorNode = audioContext.createDynamicsCompressor();
+        compressorNode.threshold.value = -25; // Good starting point
+        compressorNode.knee.value = 30;
+        compressorNode.ratio.value = 12;
+        compressorNode.attack.value = 0.003;
+        compressorNode.release.value = 0.25;
+        compressorNode.connect(audioContext.destination);
+
         createDemoBuffer(audioContext);
       } catch (e) {
         console.error('Web Audio API is not supported in this browser.');
@@ -68,7 +84,7 @@ export default function AudioDemo() {
       for (let j = startSample; j < endSample; j++) {
         const time = (j - startSample) / sampleRate;
         const envelope = 1 - (j - startSample) / (endSample - startSample); // simple decay
-        data[j] = Math.sin(2 * Math.PI * freq * time) * 0.3 * envelope;
+        data[j] = Math.sin(2 * Math.PI * freq * time) * 0.5 * envelope; // Reduced gain to avoid clipping
       }
     }
     
@@ -78,7 +94,7 @@ export default function AudioDemo() {
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
     const duration = 2.5;
-    const decay = 2;
+    const decay = 2.5; // Slightly longer decay for a more spacious feel
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
@@ -93,29 +109,27 @@ export default function AudioDemo() {
 
   const getAnimationPath = (time: number) => {
     const radius = 3;
-    const zRadius = 2;
     
     // 11D: Smooth figure-eight pattern with subtle reverb and filtering
     const duration = 8;
+    const zRadius = 2;
     const x = radius * Math.sin((2 * Math.PI / duration) * time);
     const z = zRadius * Math.sin((4 * Math.PI / duration) * time);
-    const y = 0; // Keep it on the listener's plane for clarity
+    const y = 0;
 
     const path = { x, y, z };
 
-    // Dynamic gain based on distance to make it feel more natural
     const distance = Math.sqrt(x * x + y * y + z * z);
     let gain = 1.0 - (distance / (radius * 1.5));
-    gain = Math.max(0.4, gain); // Ensure it doesn't get too quiet
+    gain = Math.max(0.4, Math.min(1.0, gain * 1.2)); // Clamp and boost slightly
 
-    // Subtle filtering
-    const freq = 3000 + (z * 500);
+    const freq = 4000 + (z * 600); // More responsive filter
 
     return { ...path, gain, freq };
   };
 
   const startSpatialAnimation = async () => {
-    if (!audioContext || !pannerNode || !filterNode || !gainNode) return;
+    if (!audioContext || !pannerNode || !filterNode || !gainNode || !compressorNode) return;
 
     const p = pannerNode;
     const f = filterNode;
@@ -123,30 +137,29 @@ export default function AudioDemo() {
 
     // Disconnect previous connections to be safe
     g.disconnect();
-    f.disconnect();
-    p.disconnect();
-    if (convolverNode) convolverNode.disconnect();
-
+    
     if (!convolverNode) {
         convolverNode = audioContext.createConvolver();
         convolverNode.buffer = await createReverbImpulseResponse(audioContext);
     }
     
-    // Create a more balanced wet/dry mix for the reverb
     const dryNode = audioContext.createGain();
-    dryNode.gain.value = 0.8;
+    dryNode.gain.value = 0.75; // More dry signal for clarity
     const wetNode = audioContext.createGain();
-    wetNode.gain.value = 0.2;
+    wetNode.gain.value = 0.25; // Less reverb
 
+    // Route audio through the effect chain
     gainNode.connect(dryNode);
     gainNode.connect(wetNode);
-
-    wetNode.connect(convolverNode);
-    convolverNode.connect(audioContext.destination);
-
+    
     dryNode.connect(f);
     f.connect(p);
-    p.connect(audioContext.destination);
+    
+    wetNode.connect(convolverNode);
+    convolverNode.connect(p);
+    
+    // Everything routes to the panner, then to the master compressor
+    p.connect(compressorNode);
 
     const startTime = audioContext.currentTime;
 
@@ -159,7 +172,7 @@ export default function AudioDemo() {
       const time = audioContext.currentTime - startTime;
       const { x, y, z, gain: newGain, freq } = getAnimationPath(time);
 
-      const rampTime = audioContext.currentTime + 0.1;
+      const rampTime = audioContext.currentTime + 0.1; // Smoother ramp
       p.positionX.linearRampToValueAtTime(x, rampTime);
       p.positionY.linearRampToValueAtTime(y, rampTime);
       p.positionZ.linearRampToValueAtTime(z, rampTime);
@@ -172,7 +185,7 @@ export default function AudioDemo() {
   };
 
   const playPreview = async (type: 'before' | 'after') => {
-    if (!buffer.current || !audioContext) return;
+    if (!buffer.current || !audioContext || !compressorNode) return;
 
     stopPreview();
     setActivePlayer(type);
@@ -203,7 +216,8 @@ export default function AudioDemo() {
       }
       await startSpatialAnimation();
     } else {
-      gainNode.connect(audioContext.destination);
+      // "Before" sound also goes through compressor for fair A/B test
+      gainNode.connect(compressorNode);
     }
 
     sourceNode.start(0);
@@ -225,7 +239,9 @@ export default function AudioDemo() {
     gainNode?.disconnect();
     pannerNode?.disconnect();
     filterNode?.disconnect();
-    if(convolverNode) convolverNode.disconnect();
+    convolverNode?.disconnect();
+    // Do not disconnect the compressor from the destination
+    
     setIsPlaying(false);
     setActivePlayer(null);
   };
@@ -245,6 +261,7 @@ export default function AudioDemo() {
         description="Original Mono Audio"
         isPlaying={isPlaying && activePlayer === 'before'}
         onTogglePlay={() => togglePlay('before')}
+        coverImage={beforeImage}
       />
       <DemoPlayerCard
         title="After"
@@ -252,6 +269,7 @@ export default function AudioDemo() {
         isPlaying={isPlaying && activePlayer === 'after'}
         onTogglePlay={() => togglePlay('after')}
         isEnhanced
+        coverImage={afterImage}
       />
     </div>
   );
@@ -263,6 +281,7 @@ interface DemoPlayerCardProps {
   isPlaying: boolean;
   onTogglePlay: () => void;
   isEnhanced?: boolean;
+  coverImage?: ImagePlaceholder;
 }
 
 function DemoPlayerCard({
@@ -271,6 +290,7 @@ function DemoPlayerCard({
   isPlaying,
   onTogglePlay,
   isEnhanced,
+  coverImage,
 }: DemoPlayerCardProps) {
   const Icon = isPlaying ? Pause : Play;
   return (
@@ -281,7 +301,18 @@ function DemoPlayerCard({
       </CardHeader>
       <CardContent className="flex flex-col items-center justify-center gap-4 pt-4 pb-8">
         <div className={`relative w-48 h-48 flex items-center justify-center rounded-lg overflow-hidden ${isEnhanced ? 'bg-primary/10' : 'bg-muted/50'}`}>
+          {coverImage ? (
+            <Image 
+              src={coverImage.imageUrl} 
+              alt={coverImage.description} 
+              width={192}
+              height={192}
+              className="object-cover w-full h-full"
+              data-ai-hint={coverImage.imageHint}
+            />
+          ) : (
             <p className="text-muted-foreground text-sm font-mono">{isEnhanced ? '< 11D Processed >' : '< Mono Source >'}</p>
+          )}
         </div>
         <Button onClick={onTogglePlay} size="lg" variant={isEnhanced ? 'default' : 'outline'} className="w-48">
           <Icon className="mr-2 h-5 w-5" />

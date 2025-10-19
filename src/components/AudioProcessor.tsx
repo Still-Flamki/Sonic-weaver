@@ -25,6 +25,7 @@ let pannerNode: PannerNode | null = null;
 let filterNode: BiquadFilterNode | null = null;
 let gainNode: GainNode | null = null;
 let convolverNode: ConvolverNode | null = null;
+let compressorNode: DynamicsCompressorNode | null = null;
 
 export default function AudioProcessor({
   effectType,
@@ -45,6 +46,14 @@ export default function AudioProcessor({
     if (!audioContext) {
       try {
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        // Set up a mastering compressor at the end of the chain
+        compressorNode = audioContext.createDynamicsCompressor();
+        compressorNode.threshold.value = -25; // Don't compress too much
+        compressorNode.knee.value = 30;      // Soft knee for smooth compression
+        compressorNode.ratio.value = 12;      // Standard compression ratio
+        compressorNode.attack.value = 0.003;  // Fast attack
+        compressorNode.release.value = 0.25;  // Medium release
+        compressorNode.connect(audioContext.destination);
       } catch (e) {
         setError('Web Audio API is not supported in this browser.');
         console.error(e);
@@ -110,8 +119,8 @@ export default function AudioProcessor({
 
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
-    const duration = 2.5; // Slightly longer reverb tail
-    const decay = 2;
+    const duration = 2.5; 
+    const decay = 2.5;
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
@@ -127,15 +136,18 @@ export default function AudioProcessor({
   const getAnimationPath = (time: number) => {
     const radius = 3;
     let path: { x: number; y: number; z: number };
-    let freq = 4400; // Base frequency for filter
+    let freq = 22050; // Default: no filter
     let gain = 1.0;
 
     switch (effectType) {
       case '4D': {
         // Smooth L-R sweep in front
         const duration = 4;
-        const angle = Math.PI + Math.cos((2 * Math.PI / duration) * time) * (Math.PI / 2);
-        path = { x: radius * Math.cos(angle), y: 0, z: radius * Math.sin(angle) };
+        path = { 
+          x: radius * Math.sin(time * (2 * Math.PI / duration)), 
+          y: 0, 
+          z: -radius * Math.cos(time * (2 * Math.PI / duration)) 
+        };
         break;
       }
       case '8D': {
@@ -151,18 +163,14 @@ export default function AudioProcessor({
         const zRadius = 2;
         const x = radius * Math.sin((2 * Math.PI / duration) * time);
         const z = zRadius * Math.sin((4 * Math.PI / duration) * time);
-        const y = 0; // Keep it on the listener's plane for clarity
-
+        const y = 0; 
         path = { x, y, z };
         
-        // Dynamic gain based on distance to make it feel more natural
         const distance = Math.sqrt(x * x + y * y + z * z);
         gain = 1.0 - (distance / (radius * 1.5));
-        gain = Math.max(0.4, gain); // Ensure it doesn't get too quiet
+        gain = Math.max(0.4, Math.min(1.0, gain * 1.2)); // Clamp gain to prevent clipping but keep it audible
 
-        // Subtle filtering
-        freq = 3000 + (z * 500);
-
+        freq = 4000 + (z * 600); // Dynamic lowpass filter
         break;
       }
       default:
@@ -173,17 +181,17 @@ export default function AudioProcessor({
   };
 
   const startSpatialAnimation = async () => {
-    if (!audioContext || !pannerNode || !filterNode || !gainNode) return;
+    if (!audioContext || !pannerNode || !filterNode || !gainNode || !compressorNode) return;
   
     const p = pannerNode;
     const f = filterNode;
     const g = gainNode;
+    const c = compressorNode;
     
+    // Clear previous connections
     g.disconnect();
-    f.disconnect();
-    p.disconnect();
     if (convolverNode) convolverNode.disconnect();
-
+    
     if (effectType === '11D') {
         if (!convolverNode) {
             convolverNode = audioContext.createConvolver();
@@ -191,22 +199,23 @@ export default function AudioProcessor({
         }
         
         const dryNode = audioContext.createGain();
-        dryNode.gain.value = 0.8; 
+        dryNode.gain.value = 0.75; // More dry signal for clarity
         const wetNode = audioContext.createGain();
-        wetNode.gain.value = 0.2; 
+        wetNode.gain.value = 0.25; // Reverb is more subtle
 
         gainNode.connect(dryNode);
         gainNode.connect(wetNode);
         wetNode.connect(convolverNode);
-        convolverNode.connect(audioContext.destination);
+        convolverNode.connect(p); // Reverb is also spatialized
         dryNode.connect(f);
         f.connect(p);
     } else {
+        // For 4D and 8D, no reverb
         gainNode.connect(f);
         f.connect(p);
     }
     
-    p.connect(audioContext.destination);
+    p.connect(c); // Connect effect chain to the compressor
 
     const startTime = audioContext.currentTime;
 
@@ -219,7 +228,7 @@ export default function AudioProcessor({
       const time = audioContext.currentTime - startTime;
       const { x, y, z, gain: newGain, freq } = getAnimationPath(time);
       
-      const rampTime = audioContext.currentTime + 0.1;
+      const rampTime = audioContext.currentTime + 0.1; // Use a smooth ramp to avoid clicks
       p.positionX.linearRampToValueAtTime(x, rampTime);
       p.positionY.linearRampToValueAtTime(y, rampTime);
       p.positionZ.linearRampToValueAtTime(z, rampTime);
@@ -232,7 +241,7 @@ export default function AudioProcessor({
   };
 
   const playPreview = async () => {
-    if (!decodedBuffer || !audioContext) return;
+    if (!decodedBuffer || !audioContext || !compressorNode) return;
     
     stopPreview();
 
@@ -285,12 +294,10 @@ export default function AudioProcessor({
       }
       sourceNode = null;
     }
-    if (gainNode) gainNode.disconnect();
-    if (filterNode) filterNode.disconnect();
-    if (pannerNode) pannerNode.disconnect();
-    if (convolverNode) {
-      convolverNode.disconnect();
-    }
+    gainNode?.disconnect();
+    filterNode?.disconnect();
+    pannerNode?.disconnect();
+    convolverNode?.disconnect();
     
     setIsPlaying(false);
   };
@@ -396,6 +403,7 @@ export default function AudioProcessor({
             decodedBuffer.sampleRate
         );
 
+        // Re-create the full audio graph for the offline context
         const offlineSource = offlineCtx.createBufferSource();
         offlineSource.buffer = decodedBuffer;
 
@@ -408,6 +416,15 @@ export default function AudioProcessor({
         offlineFilter.Q.value = 1;
         
         const offlineGain = offlineCtx.createGain();
+
+        const offlineCompressor = offlineCtx.createDynamicsCompressor();
+        offlineCompressor.threshold.value = -25;
+        offlineCompressor.knee.value = 30;
+        offlineCompressor.ratio.value = 12;
+        offlineCompressor.attack.value = 0.003;
+        offlineCompressor.release.value = 0.25;
+        offlineCompressor.connect(offlineCtx.destination);
+        
 
         if(offlineCtx.listener.positionX) {
             offlineCtx.listener.positionX.value = 0;
@@ -424,29 +441,30 @@ export default function AudioProcessor({
             offlineConvolver = offlineCtx.createConvolver();
             offlineConvolver.buffer = await createReverbImpulseResponse(offlineCtx);
             const dryNode = offlineCtx.createGain();
-            dryNode.gain.value = 0.8;
+            dryNode.gain.value = 0.75;
             const wetNode = offlineCtx.createGain();
-            wetNode.gain.value = 0.2;
+            wetNode.gain.value = 0.25;
             offlineGain.connect(dryNode);
             offlineGain.connect(wetNode);
             wetNode.connect(offlineConvolver);
-            offlineConvolver.connect(offlineCtx.destination);
+            offlineConvolver.connect(offlinePanner);
             dryNode.connect(offlineFilter);
             offlineFilter.connect(offlinePanner);
         } else {
             offlineGain.connect(offlineFilter);
             offlineFilter.connect(offlinePanner);
         }
-        offlinePanner.connect(offlineCtx.destination);
+        offlinePanner.connect(offlineCompressor);
         
         const timeStep = 0.05;
         for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
             const { x, y, z, gain, freq } = getAnimationPath(time);
-            offlinePanner.positionX.linearRampToValueAtTime(x, time);
-            offlinePanner.positionY.linearRampToValueAtTime(y, time);
-            offlinePanner.positionZ.linearRampToValueAtTime(z, time);
-            offlineFilter.frequency.linearRampToValueAtTime(freq, time);
-            offlineGain.gain.linearRampToValueAtTime(gain, time);
+            const rampTime = time + timeStep;
+            offlinePanner.positionX.linearRampToValueAtTime(x, rampTime);
+            offlinePanner.positionY.linearRampToValueAtTime(y, rampTime);
+            offlinePanner.positionZ.linearRampToValueAtTime(z, rampTime);
+            offlineFilter.frequency.linearRampToValueAtTime(freq, rampTime);
+            offlineGain.gain.linearRampToValueAtTime(gain, rampTime);
         }
 
         offlineSource.start(0);
