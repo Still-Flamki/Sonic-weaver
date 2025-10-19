@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowRight, Ear } from 'lucide-react';
 import AudioDemo from '@/components/AudioDemo';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 export default function Home() {
@@ -54,7 +53,7 @@ export default function Home() {
                     From Flat to Full Immersion
                 </h3>
                 <p className="mt-2 max-w-2xl mx-auto text-lg text-muted-foreground">
-                    Use headphones for the best experience. Click play on both cards to instantly compare the original mono sound with the processed 11D audio.
+                    Use headphones for the best experience. Click play and toggle the switch to instantly compare the original sound with the processed 11D audio.
                 </p>
             </div>
             <AudioDemo />
@@ -83,8 +82,11 @@ export default function Home() {
                         </Button>
                     </div>
                 </div>
-                 <div>
-                    {/* This space is intentionally left blank to balance the layout, as requested. */}
+                 <div className="space-y-4 rounded-lg bg-card/20 p-8 border border-primary/20 backdrop-blur-sm">
+                    <h4 className="font-headline text-xl font-bold text-foreground">Pro-Tip: Genre Presets</h4>
+                    <p className="text-muted-foreground">
+                        Check out the info tab in the header for custom preset suggestions tailored for genres like Hip Hop, Rock, Classical, and Electronic music to get the perfect starting point for your track.
+                    </p>
                 </div>
             </div>
           </section>

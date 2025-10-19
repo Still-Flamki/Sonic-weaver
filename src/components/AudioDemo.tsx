@@ -3,9 +3,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Play, Pause } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { Label } from './ui/label';
+import { Switch } from './ui/switch';
+import { cn } from '@/lib/utils';
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -17,13 +19,15 @@ let compressorNode: DynamicsCompressorNode | null = null;
 
 export default function AudioDemo() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [activePlayer, setActivePlayer] = useState<'before' | 'after' | null>(null);
+  const [isEnhanced, setIsEnhanced] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const buffer = useRef<AudioBuffer | null>(null);
   const animationFrameRef = useRef<number>();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (!audioContext) {
+  const initializeAudio = () => {
+    if (isInitialized) return;
+     if (!audioContext) {
       try {
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         compressorNode = audioContext.createDynamicsCompressor();
@@ -35,6 +39,7 @@ export default function AudioDemo() {
         compressorNode.connect(audioContext.destination);
 
         createDemoBuffer(audioContext);
+        setIsInitialized(true);
       } catch (e) {
         console.error('Web Audio API is not supported in this browser.');
         toast({
@@ -44,11 +49,22 @@ export default function AudioDemo() {
         });
       }
     }
+  }
 
+  useEffect(() => {
     return () => {
       stopPreview();
     };
-  }, [toast]);
+  }, []);
+
+  useEffect(() => {
+    if (isPlaying) {
+      // Effect change during playback, re-initialize animation
+      stopPreview();
+      setTimeout(() => playPreview(isEnhanced), 50);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEnhanced]);
 
   const createDemoBuffer = (context: AudioContext) => {
     const sampleRate = context.sampleRate;
@@ -97,15 +113,12 @@ export default function AudioDemo() {
 
   const getAnimationPath = (time: number) => {
     const radius = 3;
-    let path: { x: number; y: number; z: number };
-    let freq = 22050; 
-    let gain = 1.0;
-
     const duration = 8;
+    
     const x = radius * Math.sin((2 * Math.PI / duration) * time);
     const z = radius * Math.cos((2 * Math.PI / duration) * time);
     const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; 
-    path = { x, y, z };
+    const path = { x, y, z };
     
     const distance = Math.sqrt(x * x + y * y + z * z);
     const minGain = 0.4;
@@ -113,17 +126,16 @@ export default function AudioDemo() {
     const proximityThreshold = 1.2;
     const steepness = 2; 
 
+    let gain = maxGain;
     if (distance < proximityThreshold) {
-        const proximityFactor = Math.pow(distance / proximityThreshold, steepness);
-        gain = minGain + (maxGain - minGain) * proximityFactor;
-    } else {
-        gain = maxGain;
+      const proximityFactor = Math.pow(distance / proximityThreshold, steepness);
+      gain = minGain + (maxGain - minGain) * proximityFactor;
     }
-
+    
     const baseFreq = 2500;
     const freqRange = 15000;
     const zNormalized = (z + radius) / (2 * radius);
-    freq = baseFreq + (zNormalized * freqRange);
+    const freq = baseFreq + (zNormalized * freqRange);
     
     return { ...path, gain, freq };
   };
@@ -181,11 +193,10 @@ export default function AudioDemo() {
     animate();
   };
 
-  const playPreview = async (type: 'before' | 'after') => {
+  const playPreview = async (enhanced: boolean) => {
     if (!buffer.current || !audioContext || !compressorNode) return;
 
     stopPreview();
-    setActivePlayer(type);
     await audioContext.resume();
 
     sourceNode = audioContext.createBufferSource();
@@ -195,7 +206,7 @@ export default function AudioDemo() {
     gainNode = audioContext.createGain();
     sourceNode.connect(gainNode);
 
-    if (type === 'after') {
+    if (enhanced) {
       pannerNode = audioContext.createPanner();
       pannerNode.panningModel = 'HRTF';
       pannerNode.distanceModel = 'inverse';
@@ -238,64 +249,60 @@ export default function AudioDemo() {
     convolverNode?.disconnect();
     
     setIsPlaying(false);
-    setActivePlayer(null);
   };
 
-  const togglePlay = (type: 'before' | 'after') => {
-    if (isPlaying && activePlayer === type) {
+  const handleTogglePlay = () => {
+    if (!isInitialized) {
+      initializeAudio();
+      // Wait a moment for context to be ready, then play
+      setTimeout(() => {
+        playPreview(isEnhanced);
+      }, 100);
+    } else if (isPlaying) {
       stopPreview();
     } else {
-      playPreview(type);
+      playPreview(isEnhanced);
     }
   };
 
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-      <DemoPlayerCard
-        title="Before"
-        description="Original Mono Audio"
-        isPlaying={isPlaying && activePlayer === 'before'}
-        onTogglePlay={() => togglePlay('before')}
-      />
-      <DemoPlayerCard
-        title="After"
-        description="11D Effect with Reverb"
-        isPlaying={isPlaying && activePlayer === 'after'}
-        onTogglePlay={() => togglePlay('after')}
-        isEnhanced
-      />
+    <div className="max-w-2xl mx-auto">
+      <Card className={cn(
+        "shadow-lg bg-card/50 backdrop-blur-sm border-primary/20 shadow-primary/10 transition-all",
+        isEnhanced && isPlaying && "shadow-accent/20 border-accent/30"
+      )}>
+        <CardHeader>
+          <CardTitle className="font-headline text-2xl tracking-tight">
+            {isEnhanced ? "11D Effect with Reverb" : "Original Mono Audio"}
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            A simple melody to demonstrate the effect.
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center gap-6 pt-4 pb-8">
+            <div className="flex items-center space-x-4">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                    <VolumeX />
+                    <span>Mono</span>
+                </div>
+                <Switch
+                    id="effect-toggle"
+                    checked={isEnhanced}
+                    onCheckedChange={setIsEnhanced}
+                    aria-label="Toggle between Mono and 11D audio"
+                />
+                <div className={cn("flex items-center gap-2 text-muted-foreground", isEnhanced && "text-accent")}>
+                    <Volume2 />
+                    <span>11D</span>
+                </div>
+            </div>
+            <Button onClick={handleTogglePlay} size="lg" variant="outline" className="w-48">
+              {isPlaying ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
+              {isPlaying ? 'Pause' : 'Play Demo'}
+            </Button>
+        </CardContent>
+      </Card>
     </div>
-  );
-}
-
-interface DemoPlayerCardProps {
-  title: string;
-  description: string;
-  isPlaying: boolean;
-  onTogglePlay: () => void;
-  isEnhanced?: boolean;
-}
-
-function DemoPlayerCard({
-  title,
-  description,
-  isPlaying,
-  onTogglePlay,
-  isEnhanced,
-}: DemoPlayerCardProps) {
-  const Icon = isPlaying ? Pause : Play;
-  return (
-    <Card className="shadow-lg bg-card/50 backdrop-blur-sm border-primary/20 shadow-primary/10 overflow-hidden">
-      <CardHeader>
-        <CardTitle className="font-headline text-2xl tracking-tight">{title}</CardTitle>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </CardHeader>
-      <CardContent className="flex flex-col items-center justify-center gap-6 pt-6 pb-8">
-        <Button onClick={onTogglePlay} size="lg" variant={isEnhanced ? 'default' : 'outline'} className="w-48">
-          <Icon className="mr-2 h-5 w-5" />
-          {isPlaying ? 'Pause' : 'Play'}
-        </Button>
-      </CardContent>
-    </Card>
   );
 }
