@@ -16,15 +16,16 @@ const themes = [
 ];
 
 export function ThemeSwitcher() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
+  // When mounted on client, now we can show the UI
   useEffect(() => {
     setMounted(true);
   }, []);
 
   if (!mounted) {
-    // Render placeholders or nothing on the server to avoid mismatch
+    // Render placeholders on the server to avoid mismatch
     return (
         <div className="flex flex-wrap items-center justify-center gap-3">
             {themes.map((t) => (
