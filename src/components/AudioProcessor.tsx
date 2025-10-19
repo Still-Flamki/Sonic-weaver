@@ -15,9 +15,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import AudioVisualizer, { VisualizationType } from './AudioVisualizer';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
-
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -68,8 +65,6 @@ export default function AudioProcessor({
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
   const [visualizationType, setVisualizationType] = useState<VisualizationType>('orb');
-
-  const ffmpegRef = useRef<FFmpeg | null>(null);
 
 
   const { toast } = useToast();
@@ -501,12 +496,12 @@ export default function AudioProcessor({
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
-    const extension = fileType === 'audio' ? 'wav' : 'mp4';
+    const extension = fileType === 'audio' ? 'wav' : 'webm';
     a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.${extension}`;
     document.body.appendChild(a);
     a.click();
     URL.revokeObjectURL(url);
-a.remove();
+    a.remove();
 
      toast({
         title: 'Download Ready!',
@@ -522,17 +517,21 @@ a.remove();
             return;
         }
         
-        const videoStream = canvas.captureStream(30);
+        const videoStream = canvas.captureStream(30); // 30 FPS
         
+        // Create a temporary audio context to play the rendered audio
         const tempAudioCtx = new AudioContext();
         const audioSource = tempAudioCtx.createBufferSource();
         audioSource.buffer = renderedBuffer;
         
+        // Create a destination for the audio stream
         const audioDestination = tempAudioCtx.createMediaStreamDestination();
         audioSource.connect(audioDestination);
 
+        // Get the audio track from the destination
         const audioStream = audioDestination.stream;
         
+        // Combine video and audio tracks into one stream
         const combinedStream = new MediaStream([
             videoStream.getVideoTracks()[0],
             audioStream.getAudioTracks()[0],
@@ -560,7 +559,7 @@ a.remove();
                 if (recorder.state === 'recording') {
                     recorder.stop();
                 }
-            }, 500); 
+            }, 500); // Add a small delay to ensure everything is captured
         };
 
         recorder.start();
@@ -644,36 +643,8 @@ a.remove();
 
         if (fileType === 'video') {
             setRenderMessage('Capturing video...');
-            const webmBlob = await renderVideo(renderedBuffer);
-
-            setRenderMessage('Converting to MP4...');
-            
-            if (!ffmpegRef.current) {
-                ffmpegRef.current = new FFmpeg();
-            }
-            const ffmpeg = ffmpegRef.current;
-            
-            ffmpeg.on('progress', ({ progress }) => {
-              if (progress >= 0 && progress <= 1) {
-                  setRenderProgress(progress * 100);
-              }
-            });
-            
-            if (!ffmpeg.loaded) {
-                const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm";
-                await ffmpeg.load({
-                  coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-                  wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-                });
-            }
-
-            await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
-            // Use ultrafast preset to minimize conversion time
-            await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4']);
-            
-            const data = await ffmpeg.readFile('output.mp4');
-            const mp4Blob = new Blob([data], { type: 'video/mp4' });
-            downloadFile(mp4Blob, 'video');
+            const videoBlob = await renderVideo(renderedBuffer);
+            downloadFile(videoBlob, 'video');
 
         } else {
             const wavBlob = bufferToWav(renderedBuffer);
@@ -952,7 +923,7 @@ a.remove();
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleDownload('video')}>
                     <Video className="mr-2 h-4 w-4" />
-                    <span>Video (.mp4)</span>
+                    <span>Video (.webm)</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
