@@ -32,7 +32,7 @@ export default {
         },
       }),
       fontFamily: {
-        body: ['Poppins', 'sans-serif'],
+        body: ['Cormorant Garamond', 'serif'],
         headline: ['Rye', 'serif'],
         code: ['monospace'],
       },
