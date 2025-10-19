@@ -32,7 +32,7 @@ export default {
         },
       }),
       fontFamily: {
-        body: ['Roboto', 'sans-serif'],
+        body: ['Merriweather', 'serif'],
         headline: ['Rye', 'serif'],
         code: ['monospace'],
       },
