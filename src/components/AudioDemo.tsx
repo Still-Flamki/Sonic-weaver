@@ -299,7 +299,7 @@ export default function AudioDemo() {
                     onCheckedChange={setIsEnhanced}
                     aria-label="Toggle between Mono and 11D audio"
                 />
-                <div className={cn("flex items-center gap-2 text-muted-foreground", isEnhanced && "text-accent")}>
+                <div className={cn("flex items-center gap-2 text-muted-foreground transition-colors", isEnhanced && "text-accent")}>
                     <Volume2 />
                     <span>11D</span>
                 </div>

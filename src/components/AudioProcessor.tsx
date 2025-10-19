@@ -637,13 +637,19 @@ export default function AudioProcessor({
           <Label>2. Select Effect Type</Label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {(['4D', '8D', '11D', 'Custom'] as const).map(effect => (
-                <VintageSwitch
+                <button
                   key={effect}
-                  label={effect}
-                  isActive={effectType === effect}
-                  onToggle={() => handleEffectChange(effect)}
+                  onClick={() => handleEffectChange(effect)}
                   disabled={isBusy}
-                />
+                  className={cn(
+                    "rounded-md border-2 p-4 font-headline text-lg font-semibold transition-all",
+                    "border-input bg-background/50 hover:border-primary/50 hover:bg-primary/10",
+                    effectType === effect ? "border-primary/80 bg-primary/20 text-primary-foreground shadow-lg shadow-primary/10" : "text-muted-foreground",
+                    isBusy && "cursor-not-allowed opacity-50"
+                  )}
+                >
+                  {effect}
+                </button>
             ))}
           </div>
         </div>
@@ -787,47 +793,5 @@ export default function AudioProcessor({
         </Button>
       </CardFooter>
     </Card>
-  );
-}
-
-
-interface VintageSwitchProps {
-  label: string;
-  isActive: boolean;
-  onToggle: () => void;
-  disabled?: boolean;
-}
-
-function VintageSwitch({ label, isActive, onToggle, disabled }: VintageSwitchProps) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={isActive}
-      onClick={onToggle}
-      disabled={disabled}
-      className={cn(
-        "relative flex w-full flex-col items-center justify-between rounded-md border-2 p-4 font-headline transition-all",
-        "border-muted bg-popover text-muted-foreground shadow-inner",
-        isActive ? "border-primary/80 bg-primary/10 text-primary-foreground shadow-primary/20" : "hover:bg-accent/20 hover:border-accent",
-        disabled && "cursor-not-allowed opacity-50"
-      )}
-    >
-      <div className={cn(
-        "mb-2 h-2 w-2 rounded-full bg-red-500/30 transition-all",
-        isActive && "bg-red-500 shadow-[0_0_6px_2px] shadow-red-500/50"
-      )}></div>
-      
-      <span className="text-lg font-semibold">{label}</span>
-      <span className="text-xs text-muted-foreground/80">Effect</span>
-
-      {/* The mechanical switch part */}
-      <div className="mt-3 h-6 w-10 rounded-sm bg-neutral-800 p-1 shadow-inner">
-          <div className={cn(
-              "h-full w-1/2 bg-neutral-400 shadow-md transition-transform",
-              isActive ? "translate-x-full" : "translate-x-0"
-          )}></div>
-      </div>
-    </button>
   );
 }

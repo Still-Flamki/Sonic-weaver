@@ -147,7 +147,7 @@ export default function AudioGame() {
             {gameState === 'idle' && (
                 <div className="flex flex-col items-center justify-center h-full gap-4 my-8">
                     <p className="text-muted-foreground text-center max-w-xs">Press Start to begin the game. <br/> Headphones are required!</p>
-                    <Button onClick={startRound} size="lg">
+                    <Button onClick={startRound} size="lg" variant="secondary" className="bg-accent text-accent-foreground hover:bg-accent/90">
                         <Play className="mr-2 h-5 w-5" />
                         Start Game
                     </Button>
@@ -179,8 +179,6 @@ export default function AudioGame() {
                                     isIncorrect && "bg-destructive/80 border-destructive-foreground/50 text-white"
                                 )}
                                 style={{
-                                    top: '50%',
-                                    left: '50%',
                                     transform: `translate(-50%, -50%) translate(${Math.cos(angle * Math.PI / 180) * 120}px, ${Math.sin(angle * Math.PI / 180) * 120}px)`
                                 }}
                             >
