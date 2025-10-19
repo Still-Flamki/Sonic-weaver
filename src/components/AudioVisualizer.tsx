@@ -497,89 +497,77 @@ const drawBloom = (
     height: number,
     time: number
   ) => {
-    analyser.getByteTimeDomainData(dataArray);
+    analyser.getByteFrequencyData(dataArray);
     const freqData = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteFrequencyData(freqData);
-  
+
     ctx.fillStyle = 'rgba(10, 18, 28, 0.2)';
     ctx.fillRect(0, 0, width, height);
-  
+
     const centerX = width / 2;
     const centerY = height / 2;
-    const bufferLength = dataArray.length;
-  
+
     const bass = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
-    const mids = freqData.slice(10, 30).reduce((s, v) => s + v, 0) / 20 / 255;
-    const treble = freqData.slice(50, 100).reduce((s, v) => s + v, 0) / 50 / 255;
-  
-    const numPetals = 4 + Math.floor(bass * 8);
-    const rotation = time * 0.0002;
-  
-    // Central Orb
-    const coreRadius = 10 + bass * 30;
-    const coreGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreRadius);
-    coreGradient.addColorStop(0, `rgba(255, 220, 180, ${0.3 + treble * 0.5})`);
-    coreGradient.addColorStop(1, 'rgba(10, 18, 28, 0)');
-    ctx.fillStyle = coreGradient;
-    ctx.fillRect(0,0,width,height);
-  
-  
+    const treble = freqData.slice(100, 200).reduce((s, v) => s + v, 0) / 100 / 255;
+
+    const rotation = time * 0.0001;
+
+    const drawBranch = (level: number, angle: number, length: number, opacity: number) => {
+        if (level < 0) return;
+
+        ctx.save();
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -length);
+        ctx.lineWidth = level * 1.5;
+        
+        const r = 180 - level * 20 + treble * 50;
+        const g = 100 + level * 25;
+        const b = 220 - level * 10;
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        ctx.stroke();
+
+        ctx.translate(0, -length);
+
+        const newLength = length * 0.75;
+        const newOpacity = opacity * 0.8;
+        const subBranches = 2 + Math.floor(bass * 3);
+        const spread = Math.PI / 3 * (1 + bass * 0.5);
+
+        for (let i = 0; i < subBranches; i++) {
+            const newAngle = (i / (subBranches - 1) - 0.5) * spread * (1 + Math.sin(time*0.0005 + level) * 0.1);
+            drawBranch(level - 1, newAngle, newLength, newOpacity);
+        }
+
+        ctx.restore();
+    };
+
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(rotation);
-  
-    for (let i = 0; i < numPetals; i++) {
-      ctx.save();
-      ctx.rotate((i / numPetals) * Math.PI * 2);
-  
-      ctx.beginPath();
-      let moved = false;
-  
-      const petalLength = width * 0.2 * (1 + bass * 0.5);
-      const petalWidth = height * 0.05 * (1 + mids * 1.5);
-  
-      // Draw one half of the petal
-      for (let j = 0; j < bufferLength; j += 4) {
-        const v = dataArray[j] / 128.0; // 0-2
-        const x = (j / bufferLength) * petalLength;
-        const y = (v - 1) * petalWidth;
-  
-        if (!moved) {
-          ctx.moveTo(coreRadius / 2, 0);
-          moved = true;
-        } else {
-          ctx.lineTo(coreRadius / 2 + x, y);
-        }
-      }
-      
-      // Draw the other half mirrored
-      for (let j = bufferLength - 1; j >= 0; j -= 4) {
-        const v = dataArray[j] / 128.0; // 0-2
-        const x = (j / bufferLength) * petalLength;
-        const y = (v - 1) * petalWidth;
-  
-        ctx.lineTo(coreRadius / 2 + x, -y);
-      }
-  
-      ctx.closePath();
-      
-      const r = 150 + Math.floor(mids * 105);
-      const g = 80 + Math.floor(mids * 150);
-      const b = 200 - Math.floor(bass * 50);
-      const alpha = 0.1 + (bass + mids) / 2 * 0.4;
-  
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      ctx.fill();
-      
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = `rgba(${r+50}, ${g+50}, ${b+50}, ${alpha + 0.2})`;
-      ctx.stroke();
-  
-      ctx.restore();
+
+    const maxLevel = 4 + Math.floor(bass * 3);
+    const initialBranches = 5 + Math.floor(bass * 4);
+    const initialLength = height * 0.1 * (1 + bass);
+
+    for (let i = 0; i < initialBranches; i++) {
+        const angle = (i / initialBranches) * Math.PI * 2;
+        drawBranch(maxLevel, angle, initialLength, 0.8);
     }
-  
+
+    // Central core
+    const coreRadius = 5 + bass * 20;
+    const coreGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, coreRadius);
+    coreGradient.addColorStop(0, `rgba(255, 220, 200, ${0.5 + treble * 0.5})`);
+    coreGradient.addColorStop(1, 'rgba(255, 150, 100, 0)');
+    ctx.fillStyle = coreGradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
-  };
+};
 
 // Main component
 const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
