@@ -94,7 +94,7 @@ export default function AudioDemo() {
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
     const duration = 2.5;
-    const decay = 2.5; // Slightly longer decay for a more spacious feel
+    const decay = 2.0; // Slightly shorter decay for less "weirdness"
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
@@ -109,24 +109,30 @@ export default function AudioDemo() {
 
   const getAnimationPath = (time: number) => {
     const radius = 3;
-    
-    // 11D: Smooth figure-eight pattern with subtle reverb and filtering
+    let path: { x: number; y: number; z: number };
+    let freq = 22050; // Default: no filter
+    let gain = 1.0;
+
+    // 11D: Figure-eight path with pronounced dynamics and filtering
     const duration = 8;
-    const zRadius = 2;
     const x = radius * Math.sin((2 * Math.PI / duration) * time);
-    const z = zRadius * Math.sin((4 * Math.PI / duration) * time);
-    const y = 0;
-
-    const path = { x, y, z };
-
-    // More natural gain reduction based on distance
+    const z = radius * Math.sin((4 * Math.PI / duration) * time) * 0.7; // Tighter figure-eight
+    const y = Math.cos((2 * Math.PI / (duration * 2)) * time) * 0.5; // Subtle vertical movement
+    path = { x, y, z };
+    
+    // Gain automation based on distance from center.
     const distance = Math.sqrt(x * x + y * y + z * z);
-    const maxDistance = radius * 1.2;
-    let gain = 1.0 - (distance / maxDistance);
-    gain = Math.max(0.4, Math.min(1.0, gain)); // Ensure it's audible but has dynamics
+    const maxDistance = radius * 1.1; // Allows for slight overshoot
+    gain = 1.0 - (distance / maxDistance) * 0.5; // Attenuate by max 50%
+    gain = Math.max(0.5, Math.min(1.0, gain)); // Clamp gain to prevent silence
 
-    const freq = 4000 + (z * 600); // More responsive filter
-
+    // Filter automation based on Z position (front/back)
+    // Sound is brighter in front, darker behind.
+    const baseFreq = 4000;
+    const freqRange = 10000;
+    const zNormalized = (z + radius) / (2 * radius); // Normalize Z to 0-1
+    freq = baseFreq + (zNormalized * freqRange);
+    
     return { ...path, gain, freq };
   };
 
@@ -146,9 +152,9 @@ export default function AudioDemo() {
     }
     
     const dryNode = audioContext.createGain();
-    dryNode.gain.value = 0.75; // More dry signal for clarity
+    dryNode.gain.value = 0.8; // More dry signal for clarity
     const wetNode = audioContext.createGain();
-    wetNode.gain.value = 0.25; // Less reverb
+    wetNode.gain.value = 0.2; // Reverb is subtle, just for space
 
     // Route audio through the effect chain
     gainNode.connect(dryNode);
