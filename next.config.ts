@@ -42,6 +42,16 @@ const nextConfig: NextConfig = {
       test: /\.worker\.ts$/,
       use: { loader: 'worker-loader' },
     });
+
+    // This is the correct fix for the ffmpeg.wasm build error
+    config.module.rules.push({
+        test: /classes\.js$/,
+        loader: 'string-replace-loader',
+        options: {
+            search: 'new Worker(new URL(classWorkerURL, import.meta.url),',
+            replace: 'new Worker(new URL(classWorkerURL, self.location.href),',
+        }
+    });
     
     return config;
   },
