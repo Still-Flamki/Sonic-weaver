@@ -30,23 +30,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  webpack(config, { isServer }) {
-    if (!isServer) {
-        config.resolve.fallback = {
-            fs: false,
-            path: false,
-        };
-    }
-    
+  webpack(config) {
     config.module.rules.push({
-        test: /classes\.js$/,
-        loader: 'string-replace-loader',
-        options: {
-            search: 'new Worker(new URL(classWorkerURL, import.meta.url),',
-            replace: 'new Worker(new URL(classWorkerURL, self.location.href),',
-        }
+      test: /classes\.js$/,
+      loader: 'string-replace-loader',
+      options: {
+        search: 'new Worker(new URL(classWorkerURL, import.meta.url),',
+        replace: 'new Worker(new URL(classWorkerURL, self.location.href),',
+      },
     });
-    
     return config;
   },
 };
