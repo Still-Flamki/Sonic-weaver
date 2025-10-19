@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, forwardRef } from 'react';
 
-export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'petal' | 'skyline' | 'chromatic' | 'kaleidoscope';
+export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'fabric' | 'skyline' | 'chromatic' | 'kaleidoscope';
 
 interface AudioVisualizerProps {
   analyserNode: AnalyserNode | null;
@@ -148,72 +148,153 @@ const drawTunnel = (
     }
   };
 
-const drawPetal = (
+// --- Perlin Noise for Quantum Fabric ---
+const PERLIN_YWRAPB = 4;
+const PERLIN_YWRAP = 1 << PERLIN_YWRAPB;
+const PERLIN_ZWRAPB = 8;
+const PERLIN_ZWRAP = 1 << PERLIN_ZWRAPB;
+const PERLIN_SIZE = 4095;
+let perlin: number[];
+const perlin_octaves = 4;
+const perlin_amp_falloff = 0.5;
+const scaled_cosine = (i: number) => 0.5 * (1.0 - Math.cos(i * Math.PI));
+
+const noise = (x: number, y = 0, z = 0) => {
+  if (perlin == null) {
+    perlin = new Array(PERLIN_SIZE + 1);
+    for (let i = 0; i < PERLIN_SIZE + 1; i++) {
+      perlin[i] = Math.random();
+    }
+  }
+  if (x < 0) x = -x;
+  if (y < 0) y = -y;
+  if (z < 0) z = -z;
+
+  let xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  let xf = x - xi, yf = y - yi, zf = z - zi;
+  let rxf, ryf;
+  let r = 0, ampl = 0.5;
+  let n1, n2, n3;
+
+  for (let o = 0; o < perlin_octaves; o++) {
+    let of = xi + (yi << PERLIN_YWRAPB) + (zi << PERLIN_ZWRAPB);
+    rxf = scaled_cosine(xf);
+    ryf = scaled_cosine(yf);
+    n1 = perlin[of & PERLIN_SIZE];
+    n1 += rxf * (perlin[(of + 1) & PERLIN_SIZE] - n1);
+    n2 = perlin[(of + PERLIN_YWRAP) & PERLIN_SIZE];
+    n2 += rxf * (perlin[(of + PERLIN_YWRAP + 1) & PERLIN_SIZE] - n2);
+    n1 += ryf * (n2 - n1);
+    of += PERLIN_ZWRAP;
+    n2 = perlin[of & PERLIN_SIZE];
+    n2 += rxf * (perlin[(of + 1) & PERLIN_SIZE] - n2);
+    n3 = perlin[(of + PERLIN_YWRAP) & PERLIN_SIZE];
+    n3 += rxf * (perlin[(of + PERLIN_YWRAP + 1) & PERLIN_SIZE] - n3);
+    n2 += ryf * (n3 - n2);
+    n1 += scaled_cosine(zf) * (n2 - n1);
+    r += n1 * ampl;
+    ampl *= perlin_amp_falloff;
+    xi <<= 1; xf *= 2;
+    yi <<= 1; yf *= 2;
+    zi <<= 1; zf *= 2;
+    if (xf >= 1.0) { xi++; xf--; }
+    if (yf >= 1.0) { yi++; yf--; }
+    if (zf > 1.0) { zi++; zf--; }
+  }
+  return r;
+};
+
+
+let particles: {x: number; y: number; vx: number; vy: number; life: number; }[] = [];
+let lastBass = 0;
+
+const drawFabric = (
     ctx: CanvasRenderingContext2D,
     analyser: AnalyserNode,
     dataArray: Uint8Array,
     width: number,
     height: number,
     time: number
-  ) => {
+) => {
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(freqData);
     analyser.getByteTimeDomainData(dataArray);
+
     ctx.fillStyle = 'rgba(10, 18, 28, 0.2)';
     ctx.fillRect(0, 0, width, height);
-  
-    const bufferLength = dataArray.length;
-    const centerX = width / 2;
-    const centerY = height / 2;
-  
-    const bassLevel = dataArray.slice(0, bufferLength / 4).reduce((sum, val) => sum + Math.abs(val - 128), 0) / (bufferLength / 4);
-    const intensity = Math.min(1, bassLevel / 60);
-  
-    const numPetals = 8;
-    const rotationSpeed = 0.0001;
-    const rotation = time * rotationSpeed;
-  
-    ctx.lineWidth = 1 + intensity * 3;
-  
-    for (let i = 0; i < numPetals; i++) {
-      const petalAngle = rotation + (i / numPetals) * Math.PI * 2;
-  
-      ctx.beginPath();
-      let moved = false;
-  
-      for (let j = 0; j < bufferLength; j += 4) { // Step through waveform data
-        const v = dataArray[j] / 128.0; // Normalize from 0-255 to 0-2
-        const normalizedV = (v - 1); // Normalize to -1 to 1
-        
-        // Base radius grows with bass
-        const baseRadius = width * 0.05 + intensity * width * 0.2;
-        
-        // The waveform creates the petal's edge
-        const waveOffset = normalizedV * height * 0.15;
-  
-        const radius = baseRadius + waveOffset;
-  
-        // Angle within the petal arc
-        const petalWidth = Math.PI / numPetals;
-        const angle = petalAngle - petalWidth / 2 + (j / bufferLength) * petalWidth;
-  
-        const x = centerX + Math.cos(angle) * radius;
-        const y = centerY + Math.sin(angle) * radius;
-  
-        if (!moved) {
-          ctx.moveTo(x, y);
-          moved = true;
-        } else {
-          ctx.lineTo(x, y);
+
+    const bass = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
+    const treble = freqData.slice(100, 200).reduce((s,v)=>s+v, 0) / 100 / 255;
+
+    // Particle Generation
+    if (particles.length < 500 && bass > 0.6 && bass > lastBass + 0.05) {
+        for(let i=0; i<10; i++) {
+            particles.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                vx: 0,
+                vy: 0,
+                life: 1.0,
+            });
         }
-      }
-      
-      const r = 59 * (1 - intensity) + 20;
-      const g = 130 * (1 - intensity) + 185 * intensity;
-      const b = 246 * (1 - intensity) + 180 * intensity;
-      const alpha = 0.4 + intensity * 0.6;
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      ctx.stroke();
     }
+    lastBass = bass;
+
+    const waveformSlice = dataArray.slice(0, dataArray.length / 2);
+    const gravityPoints = waveformSlice.map((val, i) => ({
+        x: (i / (waveformSlice.length - 1)) * width,
+        y: (val / 255) * height,
+        strength: Math.pow(Math.abs(val - 128) / 128, 3) * 0.1
+    }));
+    
+    // Update and draw particles
+    ctx.lineWidth = 1;
+    particles.forEach(p => {
+        // Noise field force
+        const angle = noise(p.x / 300, p.y / 300, time / 5000) * Math.PI * 4;
+        p.vx += Math.cos(angle) * 0.05;
+        p.vy += Math.sin(angle) * 0.05;
+
+        // Gravity from waveform
+        gravityPoints.forEach(g => {
+            const dx = g.x - p.x;
+            const dy = g.y - p.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq < 40000) {
+                const force = g.strength / (distSq / 1000 + 1);
+                p.vx += dx * force;
+                p.vy += dy * force;
+            }
+        });
+
+        // Update position & apply friction
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+
+        p.life -= 0.005;
+
+        // Wrap around edges
+        if (p.x < 0) p.x = width;
+        if (p.x > width) p.x = 0;
+        if (p.y < 0) p.y = height;
+        if (p.y > height) p.y = 0;
+        
+        // Draw
+        const r = 50 + Math.floor(bass * 205);
+        const g = 100 + Math.floor(treble * 155);
+        const b = 200;
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${p.life * 0.5})`;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - p.vx * 2, p.y - p.vy * 2);
+        ctx.stroke();
+    });
+
+    particles = particles.filter(p => p.life > 0);
 };
+
 
 const drawSkyline = (
   ctx: CanvasRenderingContext2D,
@@ -425,7 +506,7 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     if(!canvasCtx) return;
 
     // Different visualizers prefer different data
-    if (['orb', 'petal', 'chromatic', 'kaleidoscope'].includes(visualizationType)) {
+    if (['orb', 'petal', 'chromatic', 'kaleidoscope', 'fabric'].includes(visualizationType)) {
         analyserNode.fftSize = 1024;
     } else { // bars, tunnel, skyline
         analyserNode.fftSize = 256;
@@ -461,8 +542,8 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
         case 'tunnel':
           drawTunnel(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
           break;
-        case 'petal':
-            drawPetal(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
+        case 'fabric':
+            drawFabric(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
             break;
         case 'skyline':
             drawSkyline(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
@@ -494,5 +575,3 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
 
 AudioVisualizer.displayName = 'AudioVisualizer';
 export default AudioVisualizer;
-
-    

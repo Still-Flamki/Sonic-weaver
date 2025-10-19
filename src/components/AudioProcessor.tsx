@@ -61,7 +61,7 @@ export default function AudioProcessor({
   const [customMid, setCustomMid] = useState(0);
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
-  const [visualizationType, setVisualizationType] = useState<VisualizationType>('kaleidoscope');
+  const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
 
 
   const { toast } = useToast();
@@ -810,10 +810,10 @@ export default function AudioProcessor({
                         <SelectValue placeholder="Select a visualization" />
                     </SelectTrigger>
                     <SelectContent>
+                        <SelectItem value="fabric">Quantum Fabric</SelectItem>
                         <SelectItem value="kaleidoscope">Kaleidoscopic Echoes</SelectItem>
                         <SelectItem value="chromatic">Chromatic Aberration</SelectItem>
                         <SelectItem value="skyline">Neon Skyline</SelectItem>
-                        <SelectItem value="petal">Petal Bloom</SelectItem>
                         <SelectItem value="tunnel">Warp Tunnel</SelectItem>
                         <SelectItem value="orb">Waveform Orb</SelectItem>
                         <SelectItem value="bars">Frequency Bars</SelectItem>
@@ -874,5 +874,3 @@ export default function AudioProcessor({
     </Card>
   );
 }
-
-    
