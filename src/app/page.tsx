@@ -11,10 +11,7 @@ import { Badge } from '@/components/ui/badge';
 
 export default function Home() {
   const heroImage = PlaceHolderImages.find(p => p.id === 'hero-background');
-  const demoBefore = PlaceHolderImages.find(p => p.id === 'demo-cover-before');
-  const demoAfter = PlaceHolderImages.find(p => p.id === 'demo-cover-after');
-
-
+  
   return (
     <div className="relative flex min-h-screen flex-col bg-background">
       {heroImage && (
@@ -86,21 +83,8 @@ export default function Home() {
                         </Button>
                     </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                    {demoBefore && (
-                        <Card className="shadow-lg bg-card/50 backdrop-blur-sm border-primary/20 shadow-primary/10 overflow-hidden">
-                            <CardContent className="p-0">
-                                <Image src={demoBefore.imageUrl} alt={demoBefore.description} width={600} height={600} className="object-cover aspect-square" data-ai-hint={demoBefore.imageHint}/>
-                            </CardContent>
-                        </Card>
-                    )}
-                     {demoAfter && (
-                        <Card className="shadow-lg bg-card/50 backdrop-blur-sm border-primary/20 shadow-primary/10 overflow-hidden mt-8">
-                            <CardContent className="p-0">
-                                <Image src={demoAfter.imageUrl} alt={demoAfter.description} width={600} height={600} className="object-cover aspect-square" data-ai-hint={demoAfter.imageHint} />
-                            </CardContent>
-                        </Card>
-                    )}
+                 <div>
+                    {/* This space is intentionally left blank to balance the layout, as requested. */}
                 </div>
             </div>
           </section>

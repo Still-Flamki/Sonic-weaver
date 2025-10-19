@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Play, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 let audioContext: AudioContext | null = null;
@@ -23,21 +22,16 @@ export default function AudioDemo() {
   const animationFrameRef = useRef<number>();
   const { toast } = useToast();
 
-  const demoBefore = PlaceHolderImages.find(p => p.id === 'demo-cover-before');
-  const demoAfter = PlaceHolderImages.find(p => p.id === 'demo-cover-after');
-
-
   useEffect(() => {
     if (!audioContext) {
       try {
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        // Set up mastering compressor
         compressorNode = audioContext.createDynamicsCompressor();
-        compressorNode.threshold.value = -12;
-        compressorNode.knee.value = 30;
-        compressorNode.ratio.value = 6;
-        compressorNode.attack.value = 0.003;
-        compressorNode.release.value = 0.25;
+        compressorNode.threshold.value = -18; 
+        compressorNode.knee.value = 20;
+        compressorNode.ratio.value = 8;
+        compressorNode.attack.value = 0.005; 
+        compressorNode.release.value = 0.25; 
         compressorNode.connect(audioContext.destination);
 
         createDemoBuffer(audioContext);
@@ -58,23 +52,16 @@ export default function AudioDemo() {
 
   const createDemoBuffer = (context: AudioContext) => {
     const sampleRate = context.sampleRate;
-    const tempo = 140; // BPM
-    const noteDuration = 60 / tempo; // Duration of one beat in seconds
-    const totalDuration = noteDuration * 8; // 8 notes
+    const tempo = 140; 
+    const noteDuration = 60 / tempo; 
+    const totalDuration = noteDuration * 8; 
     
     const frameCount = sampleRate * totalDuration;
     const newBuffer = context.createBuffer(1, frameCount, sampleRate);
     const data = newBuffer.getChannelData(0);
 
     const notes = [
-      261.63, // C4
-      329.63, // E4
-      392.00, // G4
-      523.25, // C5
-      392.00, // G4
-      329.63, // E4
-      261.63, // C4
-      196.00  // G3
+      261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 261.63, 196.00
     ];
 
     for (let i = 0; i < notes.length; i++) {
@@ -83,8 +70,8 @@ export default function AudioDemo() {
       const endSample = Math.floor((i + 1) * noteDuration * sampleRate);
       for (let j = startSample; j < endSample; j++) {
         const time = (j - startSample) / sampleRate;
-        const envelope = 1 - (j - startSample) / (endSample - startSample); // simple decay
-        data[j] = Math.sin(2 * Math.PI * freq * time) * 0.4 * envelope; // Reduced gain to avoid clipping
+        const envelope = 1 - (j - startSample) / (endSample - startSample);
+        data[j] = Math.sin(2 * Math.PI * freq * time) * 0.4 * envelope;
       }
     }
     
@@ -93,15 +80,17 @@ export default function AudioDemo() {
 
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
-    const duration = 2.0;
-    const decay = 1.5;
+    const duration = 2.5;
+    const decay = 3;
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
     for (let i = 0; i < impulse.length; i++) {
-      const n = i / impulse.length;
-      left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
-      right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+        const t = i / rate;
+        const noise = Math.random() * 2 - 1;
+        const envelope = Math.pow(1 - t / duration, decay) * (1 - 0.5 * Math.sin(t * 10));
+        left[i] = noise * envelope;
+        right[i] = noise * envelope;
     }
     return impulse;
 };
@@ -109,22 +98,20 @@ export default function AudioDemo() {
   const getAnimationPath = (time: number) => {
     const radius = 3;
     let path: { x: number; y: number; z: number };
-    let freq = 22050; // Default: no filter
+    let freq = 22050; 
     let gain = 1.0;
 
-    // 11D: Figure-eight path with pronounced dynamics and filtering
     const duration = 8;
     const x = radius * Math.sin((2 * Math.PI / duration) * time);
     const z = radius * Math.cos((2 * Math.PI / duration) * time);
-    const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
+    const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; 
     path = { x, y, z };
     
-    // Proximity-based gain reduction
     const distance = Math.sqrt(x * x + y * y + z * z);
     const minGain = 0.4;
     const maxGain = 0.8;
     const proximityThreshold = 1.2;
-    const steepness = 2; // How sharply the volume drops on close approach
+    const steepness = 2; 
 
     if (distance < proximityThreshold) {
         const proximityFactor = Math.pow(distance / proximityThreshold, steepness);
@@ -133,8 +120,6 @@ export default function AudioDemo() {
         gain = maxGain;
     }
 
-
-    // Filter automation based on Z position (front/back)
     const baseFreq = 2500;
     const freqRange = 15000;
     const zNormalized = (z + radius) / (2 * radius);
@@ -269,14 +254,12 @@ export default function AudioDemo() {
       <DemoPlayerCard
         title="Before"
         description="Original Mono Audio"
-        image={demoBefore}
         isPlaying={isPlaying && activePlayer === 'before'}
         onTogglePlay={() => togglePlay('before')}
       />
       <DemoPlayerCard
         title="After"
         description="11D Effect with Reverb"
-        image={demoAfter}
         isPlaying={isPlaying && activePlayer === 'after'}
         onTogglePlay={() => togglePlay('after')}
         isEnhanced
@@ -288,7 +271,6 @@ export default function AudioDemo() {
 interface DemoPlayerCardProps {
   title: string;
   description: string;
-  image: { imageUrl: string; description: string; imageHint: string; } | undefined;
   isPlaying: boolean;
   onTogglePlay: () => void;
   isEnhanced?: boolean;
@@ -297,7 +279,6 @@ interface DemoPlayerCardProps {
 function DemoPlayerCard({
   title,
   description,
-  image,
   isPlaying,
   onTogglePlay,
   isEnhanced,
@@ -309,20 +290,7 @@ function DemoPlayerCard({
         <CardTitle className="font-headline text-2xl tracking-tight">{title}</CardTitle>
         <p className="text-sm text-muted-foreground">{description}</p>
       </CardHeader>
-      <CardContent className="flex flex-col items-center justify-center gap-6 pt-0 pb-8">
-        {image && (
-          <div className="relative w-full aspect-square rounded-md overflow-hidden shadow-lg">
-            <Image 
-                src={image.imageUrl} 
-                alt={image.description} 
-                fill 
-                className="object-cover" 
-                data-ai-hint={image.imageHint}
-                sizes="(max-width: 768px) 100vw, 50vw"
-            />
-             <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-          </div>
-        )}
+      <CardContent className="flex flex-col items-center justify-center gap-6 pt-6 pb-8">
         <Button onClick={onTogglePlay} size="lg" variant={isEnhanced ? 'default' : 'outline'} className="w-48">
           <Icon className="mr-2 h-5 w-5" />
           {isPlaying ? 'Pause' : 'Play'}
