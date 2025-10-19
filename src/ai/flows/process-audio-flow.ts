@@ -8,7 +8,6 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {googleAI} from '@genkit-ai/google-genai';
 import {z} from 'zod';
 import wav from 'wav';
 
@@ -22,17 +21,6 @@ const ProcessAudioOutputSchema = z.object({
   processedAudio: z.string().describe('The processed audio, as a data URI.'),
 });
 export type ProcessAudioOutput = z.infer<typeof ProcessAudioOutputSchema>;
-
-const audioPrompt = ai.definePrompt({
-  name: 'audioPrompt',
-  input: {schema: ProcessAudioInputSchema},
-  prompt: `You are an expert audio engineer specializing in spatial audio effects.
-The user wants to apply an '{${'effect'}}' effect to their audio.
-Process the following audio input and apply the requested effect.
-
-The audio will be provided as a data URI. Your task is to process it and return the modified audio.
-This is a simulation, so you will just act as a pass-through for the audio data, but wrap it in a WAV format.`,
-});
 
 export const processAudioFlow = ai.defineFlow(
   {
