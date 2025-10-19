@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: 'Sonic Weaver',
-  description: 'Process your audio with 4D, 8D, or 11D effects, enhanced by AI.',
+  description: 'Process your audio with immersive 4D, 8D, or 11D spatial effects.',
 };
 
 export default function RootLayout({

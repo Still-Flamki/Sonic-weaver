@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, Ear, Gamepad2, Mic2 } from 'lucide-react';
+import { ArrowRight, Ear, Gamepad2, SlidersHorizontal } from 'lucide-react';
 import AudioDemo from '@/components/AudioDemo';
 import { Badge } from '@/components/ui/badge';
 import AudioGame from '@/components/AudioGame';
@@ -21,7 +21,6 @@ export default function Home() {
           fill
           className="object-cover opacity-[0.03]"
           priority
-          data-ai-hint={heroImage.imageHint}
         />
       )}
       <div className="relative z-10 flex flex-1 flex-col">
@@ -29,8 +28,8 @@ export default function Home() {
         <main className="flex-1">
           <section className="container mx-auto px-4 md:px-6 py-12 md:py-20 text-center">
             <Badge variant="outline" className="text-sm py-1 px-3 border-primary/50 mb-4">
-                <Mic2 className="mr-2 h-4 w-4 text-primary" />
-                AI-Powered Spatial Audio
+                <SlidersHorizontal className="mr-2 h-4 w-4 text-primary" />
+                Advanced Spatial Audio
             </Badge>
             <h2 className="text-4xl md:text-6xl font-bold font-headline tracking-tight text-foreground">
               Experience Sound in a New Dimension

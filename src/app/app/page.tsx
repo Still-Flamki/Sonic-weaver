@@ -16,7 +16,6 @@ export default function AppPage() {
           fill
           className="object-cover opacity-[0.03]"
           priority
-          data-ai-hint={heroImage.imageHint}
         />
       )}
       <div className="relative z-10 flex flex-1 flex-col">
