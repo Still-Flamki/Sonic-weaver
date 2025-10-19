@@ -8,6 +8,7 @@ interface AudioVisualizerProps {
   analyserNode: AnalyserNode | null;
   isPlaying: boolean;
   visualizationType: VisualizationType;
+  spatialPath: { x: number; y: number; z: number };
 }
 
 // --- Drawing functions for each visualizer type ---
@@ -494,7 +495,7 @@ const drawChromatic = (
 
 // Main component
 const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
-  ({ analyserNode, isPlaying, visualizationType }, ref) => {
+  ({ analyserNode, isPlaying, visualizationType, spatialPath }, ref) => {
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
   const timeRef = useRef(0);
@@ -506,6 +507,12 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     if (!canvas || !analyserNode || !isPlaying) {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        const canvasCtx = canvas.getContext('2d');
+        if(canvasCtx) {
+           const dpr = window.devicePixelRatio || 1;
+           canvasCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+           canvasCtx.clearRect(0,0, canvas.width, canvas.height);
+        }
       }
       return;
     }
@@ -540,6 +547,20 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
 
       animationFrameRef.current = requestAnimationFrame(draw);
       
+      // Save the default state
+      canvasCtx.save();
+      
+      // Apply the spatial path transformation
+      const translateX = -spatialPath.x * (width / 20); // Scale the translation
+      const translateY = -spatialPath.y * (height / 20);
+      const scale = 1 - Math.abs(spatialPath.z) / 20; // Scale down as it moves away
+      
+      // Move origin to center for scaling, then translate, then move back
+      canvasCtx.translate(width / 2, height / 2);
+      canvasCtx.translate(translateX, translateY);
+      canvasCtx.scale(scale, scale);
+      canvasCtx.translate(-width / 2, -height / 2);
+
       switch(visualizationType) {
         case 'orb':
           drawOrb(canvasCtx, analyserNode, dataArray, width, height);
@@ -567,6 +588,9 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
           canvasCtx.fillStyle = 'rgba(15, 12, 22, 1)';
           canvasCtx.fillRect(0, 0, width, height);
       }
+      
+      // Restore the default state
+      canvasCtx.restore();
     };
 
     draw(0);
@@ -576,7 +600,7 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [analyserNode, isPlaying, visualizationType, canvasRef]);
+  }, [analyserNode, isPlaying, visualizationType, canvasRef, spatialPath]);
 
   return <canvas ref={canvasRef} className="w-full h-full bg-background/50" />;
 });

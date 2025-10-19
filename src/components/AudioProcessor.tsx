@@ -67,6 +67,7 @@ export default function AudioProcessor({
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
   const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
   const [activeTab, setActiveTab] = useState('presets');
+  const [spatialPath, setSpatialPath] = useState({ x: 0, y: 0, z: 0 });
 
   const { toast } = useToast();
   
@@ -374,6 +375,7 @@ export default function AudioProcessor({
       p.positionZ.linearRampToValueAtTime(z, rampTime);
       f.frequency.linearRampToValueAtTime(freq, rampTime);
       g.gain.linearRampToValueAtTime(newGain, rampTime);
+      setSpatialPath({ x, y, z });
       
       animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -433,7 +435,7 @@ export default function AudioProcessor({
     midPeakingFilter?.disconnect();
     highShelfFilter?.disconnect();
     analyserNode?.disconnect();
-    
+    setSpatialPath({ x: 0, y: 0, z: 0 });
     setIsPlaying(false);
   };
 
@@ -871,6 +873,7 @@ export default function AudioProcessor({
                     analyserNode={analyserNode} 
                     isPlaying={isPlaying}
                     visualizationType={visualizationType} 
+                    spatialPath={effectType === 'Reactive' ? spatialPath : {x:0, y:0, z:0}}
                 />
               </div>
             </div>
