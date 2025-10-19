@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle, Sparkles } from 'lucide-react';
+import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle } from 'lucide-react';
 import type { EffectType } from './SonicWeaverApp';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
@@ -154,15 +154,14 @@ export default function AudioProcessor({
         break;
       }
       case '8D': {
-        // "Immersive Orbit": A perfect circle at constant speed.
+        // "Immersive Orbit": A perfect circle at constant speed. No gain automation.
         const duration = 8;
         const angle = (2 * Math.PI / duration) * time;
         path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
-        gain = 1.0; // Constant gain for constant perceived speed
+        gain = 1.0;
         freq = 22050;
         break;
       }
-      case 'AI':
       case '11D': {
         // "Dynamic & Deep": A complex path with pronounced gain and filter automation.
         const duration = 8;
@@ -201,7 +200,7 @@ export default function AudioProcessor({
     g.disconnect();
     if (convolverNode) convolverNode.disconnect();
     
-    if (effectType === '11D' || effectType === 'AI') {
+    if (effectType === '11D') {
         if (!convolverNode) {
             convolverNode = audioContext.createConvolver();
             convolverNode.buffer = await createReverbImpulseResponse(audioContext);
@@ -446,7 +445,7 @@ export default function AudioProcessor({
         offlineSource.connect(offlineGain);
 
         let offlineConvolver: ConvolverNode | null = null;
-        if (effectType === '11D' || effectType === 'AI') {
+        if (effectType === '11D') {
             offlineConvolver = offlineCtx.createConvolver();
             offlineConvolver.buffer = await createReverbImpulseResponse(offlineCtx);
             const dryNode = offlineCtx.createGain();
@@ -574,7 +573,7 @@ export default function AudioProcessor({
                 }
               }, 50);
             }}
-            className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+            className="grid grid-cols-3 gap-4"
             disabled={isBusy}
           >
             {(['4D', '8D', '11D'] as const).map(effect => (
@@ -588,17 +587,6 @@ export default function AudioProcessor({
                 <span className="text-xs text-muted-foreground">Audio</span>
               </Label>
             ))}
-            <Label
-                htmlFor="effect-AI"
-                className="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 transition-all hover:bg-accent/20 hover:border-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:shadow-primary/20 peer-data-[state=checked]:shadow-md [&:has([data-state=checked])]:border-primary"
-              >
-                <RadioGroupItem value={'AI'} id="effect-AI" className="sr-only" />
-                 <span className="relative flex items-center text-lg font-semibold font-headline">
-                   <Sparkles className="mr-2 h-4 w-4 text-primary/80" />
-                   AI
-                 </span>
-                <span className="text-xs text-muted-foreground">Enhanced</span>
-              </Label>
           </RadioGroup>
         </div>
         
