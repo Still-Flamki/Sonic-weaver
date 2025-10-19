@@ -2,7 +2,6 @@ import { Info, Music4 } from 'lucide-react';
 import Link from 'next/link';
 import { InfoModal } from '../InfoModal';
 import { Button } from '../ui/button';
-import { ThemeSwitcher } from '../ThemeSwitcher';
 import { Separator } from '../ui/separator';
 
 export function Header() {
@@ -28,7 +27,6 @@ export function Header() {
           </div>
         </div>
         <Separator />
-        <ThemeSwitcher />
       </div>
     </header>
   );
