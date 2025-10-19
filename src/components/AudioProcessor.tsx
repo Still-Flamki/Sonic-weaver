@@ -5,14 +5,15 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle } from 'lucide-react';
+import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle, Video, Music } from 'lucide-react';
 import type { EffectType } from './SonicWeaverApp';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import AudioVisualizer from './AudioVisualizer';
+import AudioVisualizer, { VisualizationType } from './AudioVisualizer';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -51,6 +52,7 @@ export default function AudioProcessor({
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const animationFrameRef = useRef<number>();
+  const visualizerCanvasRef = useRef<HTMLCanvasElement>(null);
   
   const [customSpeed, setCustomSpeed] = useState(8);
   const [customWidth, setCustomWidth] = useState(3);
@@ -59,6 +61,7 @@ export default function AudioProcessor({
   const [customMid, setCustomMid] = useState(0);
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
+  const [visualizationType, setVisualizationType] = useState<VisualizationType>('orb');
 
 
   const { toast } = useToast();
@@ -77,7 +80,7 @@ export default function AudioProcessor({
         compressorNode.connect(audioContext.destination);
 
         analyserNode = audioContext.createAnalyser();
-        analyserNode.fftSize = 256;
+        analyserNode.fftSize = 512;
       } catch (e) {
         setError('Web Audio API is not supported in this browser.');
         console.error(e);
@@ -240,7 +243,7 @@ export default function AudioProcessor({
     return { ...path, gain, freq };
   };
 
-  const setupAudioGraph = async (context: AudioContext | OfflineAudioContext) => {
+  const setupAudioGraph = async (context: AudioContext | OfflineAudioContext, destination: AudioNode) => {
     // Universal nodes
     gainNode = context.createGain();
     pannerNode = context.createPanner();
@@ -307,22 +310,20 @@ export default function AudioProcessor({
         filterNode.connect(pannerNode);
     }
 
-    const finalOutputNode = context instanceof OfflineAudioContext ? context.destination : compressorNode;
-
-    if(pannerNode && finalOutputNode) {
+    if(pannerNode && destination) {
         if(analyserNode && context instanceof AudioContext) {
             pannerNode.connect(analyserNode);
-            analyserNode.connect(finalOutputNode);
+            analyserNode.connect(destination);
         } else {
-             pannerNode.connect(finalOutputNode);
+             pannerNode.connect(destination);
         }
     }
 };
 
   const startSpatialAnimation = async () => {
-    if (!audioContext) return;
+    if (!audioContext || !compressorNode) return;
   
-    await setupAudioGraph(audioContext);
+    await setupAudioGraph(audioContext, compressorNode);
 
     if (!pannerNode || !filterNode || !gainNode) return;
 
@@ -354,7 +355,7 @@ export default function AudioProcessor({
   };
 
   const playPreview = async () => {
-    if (!decodedBuffer || !audioContext) return;
+    if (!decodedBuffer || !audioContext || !compressorNode) return;
     
     stopPreview();
     await audioContext.resume();
@@ -486,7 +487,25 @@ export default function AudioProcessor({
     return new Blob([bufferArray], { type: 'audio/wav' });
   }
 
-  const handleDownload = async () => {
+  const downloadFile = (blob: Blob, fileType: 'audio' | 'video') => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    const extension = fileType === 'audio' ? 'wav' : 'webm';
+    a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.${extension}`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    a.remove();
+
+     toast({
+        title: 'Download Ready!',
+        description: `Your processed ${fileType} has been downloaded.`,
+    });
+  }
+
+  const handleDownload = async (fileType: 'audio' | 'video') => {
     if (!decodedBuffer) {
         toast({
             title: 'No audio to download',
@@ -500,7 +519,7 @@ export default function AudioProcessor({
     const wasPlaying = isPlaying;
     stopPreview();
     toast({
-        title: 'Rendering Audio...',
+        title: `Rendering ${fileType}...`,
         description: 'Preparing your file for download. This may take a moment.',
     });
 
@@ -511,10 +530,9 @@ export default function AudioProcessor({
             decodedBuffer.sampleRate
         );
 
-        const offlineSource = offlineCtx.createBufferSource();
-        offlineSource.buffer = decodedBuffer;
+        const mediaStreamDestination = offlineCtx.createMediaStreamDestination();
         
-        await setupAudioGraph(offlineCtx);
+        await setupAudioGraph(offlineCtx, mediaStreamDestination);
 
         if(offlineCtx.listener.positionX) {
             offlineCtx.listener.positionX.value = 0;
@@ -523,51 +541,69 @@ export default function AudioProcessor({
         } else {
             offlineCtx.listener.setPosition(0,0,0);
         }
-
+        
+        const offlineSource = offlineCtx.createBufferSource();
+        offlineSource.buffer = decodedBuffer;
         if(gainNode) {
             offlineSource.connect(gainNode);
         }
         
+        // Manual animation for offline rendering
         const graphPannerNode = pannerNode;
         const graphFilterNode = filterNode;
         const graphGainNode = gainNode;
 
-        const timeStep = 0.05;
+        const timeStep = 1 / 60; // Render at 60fps
         for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
             const { x, y, z, gain, freq } = getAnimationPath(time);
-            const rampTime = time + timeStep;
-            graphPannerNode?.positionX.linearRampToValueAtTime(x, rampTime);
-            graphPannerNode?.positionY.linearRampToValueAtTime(y, rampTime);
-            graphPannerNode?.positionZ.linearRampToValueAtTime(z, rampTime);
-            graphFilterNode?.frequency.linearRampToValueAtTime(freq, rampTime);
-            graphGainNode?.gain.linearRampToValueAtTime(gain, rampTime);
+            const rampTime = time;
+            graphPannerNode?.positionX.setValueAtTime(x, rampTime);
+            graphPannerNode?.positionY.setValueAtTime(y, rampTime);
+            graphPannerNode?.positionZ.setValueAtTime(z, rampTime);
+            graphFilterNode?.frequency.setValueAtTime(freq, rampTime);
+            graphGainNode?.gain.setValueAtTime(gain, rampTime);
         }
 
         offlineSource.start(0);
-        const renderedBuffer = await offlineCtx.startRendering();
-        
-        const wavBlob = bufferToWav(renderedBuffer);
-        const url = URL.createObjectURL(wavBlob);
-        
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.wav`;
-        document.body.appendChild(a);
-        a.click();
-        URL.revokeObjectURL(url);
-a.remove();
-        
-        toast({
-            title: 'Download Ready!',
-            description: 'Your processed audio has been downloaded.',
-        });
+
+        if (fileType === 'video') {
+            const canvas = visualizerCanvasRef.current;
+            if (!canvas) throw new Error("Visualizer canvas not found");
+
+            const videoStream = canvas.captureStream(60); 
+            const audioStream = mediaStreamDestination.stream;
+
+            const combinedStream = new MediaStream([
+                videoStream.getVideoTracks()[0],
+                audioStream.getAudioTracks()[0],
+            ]);
+
+            const recorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+            const chunks: Blob[] = [];
+            recorder.ondataavailable = (event) => chunks.push(event.data);
+
+            recorder.onstop = () => {
+                const videoBlob = new Blob(chunks, { type: 'video/webm' });
+                downloadFile(videoBlob, 'video');
+            };
+
+            recorder.start();
+            await offlineCtx.startRendering();
+            recorder.stop();
+
+        } else {
+            const renderedBuffer = await offlineCtx.startRendering();
+            const wavBlob = bufferToWav(renderedBuffer);
+            downloadFile(wavBlob, 'audio');
+        }
+
     } catch (e) {
         console.error('Offline rendering error:', e);
-        setError('Failed to render the audio for download.');
+        const message = e instanceof Error ? e.message : 'Could not render the file.';
+        setError(`Failed to render the ${fileType}. ${message}`);
         toast({
             title: 'Download Failed',
-            description: 'Could not render the audio file.',
+            description: `Could not render the ${fileType}.`,
             variant: 'destructive',
         });
     } finally {
@@ -766,8 +802,26 @@ a.remove();
         )}
         
         {decodedBuffer && (
-          <div className="pt-4">
-            <AudioVisualizer analyserNode={analyserNode} isPlaying={isPlaying} />
+          <div className="pt-4 space-y-4">
+            <div className="grid gap-2">
+                <Label htmlFor="viz-select">3. Select Visualization</Label>
+                <Select value={visualizationType} onValueChange={(val: VisualizationType) => setVisualizationType(val)} disabled={isBusy}>
+                    <SelectTrigger id="viz-select" className="w-full md:w-[240px]">
+                        <SelectValue placeholder="Select a visualization" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="orb">Orb</SelectItem>
+                        <SelectItem value="bars">Bars</SelectItem>
+                        <SelectItem value="tunnel">Tunnel</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <AudioVisualizer 
+                ref={visualizerCanvasRef}
+                analyserNode={analyserNode} 
+                isPlaying={isPlaying}
+                visualizationType={visualizationType} 
+            />
           </div>
         )}
 
@@ -785,19 +839,30 @@ a.remove();
           {isPlaying ? <Pause className="mr-2 h-4 w-4 text-primary" /> : <Play className="mr-2 h-4 w-4 text-primary" />}
           {isPlaying ? 'Pause Preview' : 'Play Preview'}
         </Button>
-        <Button onClick={handleDownload} disabled={!decodedBuffer || isBusy} className="w-full sm:w-auto">
-          {isRendering ? (
-            <>
-              <RotateCw className="mr-2 h-4 w-4 animate-spin" />
-              Rendering...
-            </>
-          ) : (
-            <>
-              <Download className="mr-2 h-4 w-4" />
-              Download
-            </>
-          )}
-        </Button>
+        
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button disabled={!decodedBuffer || isBusy} className="w-full sm:w-auto">
+                    {isRendering ? (
+                        <RotateCw className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <Download className="mr-2 h-4 w-4" />
+                    )}
+                    Download
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => handleDownload('audio')}>
+                    <Music className="mr-2 h-4 w-4" />
+                    <span>Audio Only (.wav)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload('video')}>
+                    <Video className="mr-2 h-4 w-4" />
+                    <span>Video (.webm)</span>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+
         <Button onClick={() => handleReset()} variant="ghost" className="w-full sm:w-auto sm:ml-auto" disabled={isBusy}>
             Reset
         </Button>
