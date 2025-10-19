@@ -134,13 +134,15 @@ export default function AudioProcessor({
     const radius = 3;
 
     if (effectType === '11D') {
-      convolverNode = audioContext.createConvolver();
-      convolverNode.buffer = await createReverbImpulseResponse(audioContext);
+      if (!convolverNode) {
+        convolverNode = audioContext.createConvolver();
+        convolverNode.buffer = await createReverbImpulseResponse(audioContext);
+      }
       
       const dryNode = audioContext.createGain();
-      dryNode.gain.value = 0.6; // Main signal (lowered)
+      dryNode.gain.value = 0.7; 
       const wetNode = audioContext.createGain();
-      wetNode.gain.value = 0.4; // Reverb signal (lowered)
+      wetNode.gain.value = 0.3; 
 
       gainNode.connect(dryNode);
       gainNode.connect(wetNode);
@@ -172,10 +174,34 @@ export default function AudioProcessor({
         };
         break;
       case '11D':
-        duration = 6; // Complex figure-eight for large room
+        duration = 8; // Right -> Front -> Left -> Back -> Loop
         path = (time) => {
-          const angle = (time / duration) * 2 * Math.PI;
-          return { x: Math.sin(angle) * radius, y: Math.cos(angle * 2) * 1.5, z: Math.sin(angle) * Math.cos(angle) * radius };
+          const segmentDuration = duration / 4;
+          const segment = Math.floor((time % duration) / segmentDuration);
+          const segmentTime = (time % duration) - (segment * segmentDuration);
+          const progress = segmentTime / segmentDuration;
+
+          let x = 0, y = 0, z = 0;
+          
+          switch(segment) {
+            case 0: // Right to Front
+              x = radius * (1 - progress);
+              z = -radius * progress;
+              break;
+            case 1: // Front to Left
+              x = -radius * progress;
+              z = -radius * (1 - progress);
+              break;
+            case 2: // Left to Back
+              x = -radius * (1 - progress);
+              z = radius * progress;
+              break;
+            case 3: // Back to Right
+              x = radius * progress;
+              z = radius * (1 - progress);
+              break;
+          }
+          return { x, y, z };
         };
         break;
       default:
@@ -202,7 +228,7 @@ export default function AudioProcessor({
 
       const distance = Math.sqrt(x*x + y*y + z*z);
       const newGain = 1 - (distance / (radius * 2));
-      g.gain.linearRampToValueAtTime(newGain, audioContext.currentTime + 0.05);
+      g.gain.linearRampToValueAtTime(Math.max(0.3, newGain), audioContext.currentTime + 0.05);
 
 
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -266,8 +292,8 @@ export default function AudioProcessor({
     if (filterNode) filterNode.disconnect();
     if (pannerNode) pannerNode.disconnect();
     if (convolverNode) {
+      // Disconnect but don't nullify, so we can reuse the impulse response
       convolverNode.disconnect();
-      convolverNode = null;
     }
     
     setIsPlaying(false);
@@ -342,11 +368,14 @@ export default function AudioProcessor({
           <RadioGroup
             value={effectType}
             onValueChange={(value: EffectType) => {
+              stopPreview();
               setEffectType(value);
-              if (isPlaying) {
-                // restart preview with new effect
-                playPreview();
-              }
+              // Small delay to allow nodes to disconnect before reconnecting
+              setTimeout(() => {
+                if (isPlaying || (processedBuffer && audioFile)) {
+                   playPreview();
+                }
+              }, 50);
             }}
             className="grid grid-cols-3 gap-4"
             disabled={isProcessing}
@@ -415,5 +444,3 @@ export default function AudioProcessor({
     </Card>
   );
 }
-
-    
