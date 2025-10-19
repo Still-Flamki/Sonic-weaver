@@ -8,15 +8,15 @@
     },
     {
       "id": "demo-cover-before",
-      "description": "A close-up, high-contrast black and white photo of the grooves on a vinyl record.",
-      "imageUrl": "https://images.unsplash.com/photo-1579782194340-3d0d8c370154?q=80&w=600&h=600&fit=crop&crop=entropy",
-      "imageHint": "vinyl record"
+      "description": "A cozy, compact room with a person sitting on a couch listening to a vinyl record on a turntable.",
+      "imageUrl": "https://images.unsplash.com/photo-1593642702821-c886cce294f9?q=80&w=600&h=600&fit=crop&crop=entropy",
+      "imageHint": "listening room"
     },
     {
       "id": "demo-cover-after",
-      "description": "A dark room with a person wearing headphones, surrounded by glowing purple and blue neon lines that represent sound waves.",
-      "imageUrl": "https://images.unsplash.com/photo-1519643381401-22c77e60520e?q=80&w=600&h=600&fit=crop&crop=entropy",
-      "imageHint": "headphones neon"
+      "description": "A large, clean, and empty modern hall with concrete walls and polished floors, representing a spacious environment.",
+      "imageUrl": "https://images.unsplash.com/photo-1593693397649-65d2a493d65b?q=80&w=600&h=600&fit=crop&crop=entropy",
+      "imageHint": "spacious hall"
     }
   ]
 }
