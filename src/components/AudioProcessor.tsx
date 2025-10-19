@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { UploadCloud, Download, FileAudio, RotateCw, CheckCircle2, Play, Pause } from 'lucide-react';
 import type { EffectType } from './SonicWeaverApp';
 import { useToast } from '@/hooks/use-toast';
-import { processAudio } from '@/app/actions/processAudio';
+import { processAudioAction } from '@/app/actions/processAudio';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Terminal } from 'lucide-react';
 
@@ -70,7 +70,7 @@ export default function AudioProcessor({
         reader.onload = async () => {
           const base64Audio = reader.result as string;
           try {
-            const result = await processAudio({
+            const result = await processAudioAction({
               audio: base64Audio,
               effect: effectType,
             });

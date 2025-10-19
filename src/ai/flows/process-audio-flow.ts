@@ -2,13 +2,15 @@
 /**
  * @fileOverview An AI flow to process audio with spatial effects.
  *
- * - processAudioFlow - A function that handles the audio processing.
- * - ProcessAudioInput - The input type for the processAudioFlow function.
- * - ProcessAudioOutput - The return type for the processAudioFlow function.
+ * This flow simulates applying a spatial audio effect to an audio file.
+ * It does not call any external AI services.
+ *
+ * - processAudio - A function that handles the audio processing.
+ * - ProcessAudioInput - The input type for the processAudio function.
+ * - ProcessAudioOutput - The return type for the processAudio function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'zod';
+import { z } from 'zod';
 import wav from 'wav';
 
 const ProcessAudioInputSchema = z.object({
@@ -22,29 +24,30 @@ const ProcessAudioOutputSchema = z.object({
 });
 export type ProcessAudioOutput = z.infer<typeof ProcessAudioOutputSchema>;
 
-export const processAudioFlow = ai.defineFlow(
-  {
-    name: 'processAudioFlow',
-    inputSchema: ProcessAudioInputSchema,
-    outputSchema: ProcessAudioOutputSchema,
-  },
-  async (input) => {
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // In a real scenario, you would use an AI model capable of audio manipulation.
-    // For this simulation, we will just return the original audio data,
-    // ensuring it's in a playable format (WAV).
-    const b64Data = input.audio.substring(input.audio.indexOf(',') + 1);
-    const pcmData = Buffer.from(b64Data, 'base64');
-    
-    const wavData = await toWav(pcmData);
 
-    return {
-      processedAudio: `data:audio/wav;base64,${wavData}`,
-    };
-  }
-);
+/**
+ * Simulates processing an audio file to apply a spatial effect.
+ * This function does NOT call an AI model. It returns the audio after a delay
+ * to mimic a real processing workflow.
+ * @param input The audio data and desired effect.
+ * @returns The processed audio data.
+ */
+export async function processAudio(input: ProcessAudioInput): Promise<ProcessAudioOutput> {
+  // Simulate processing delay to mimic a real-world scenario.
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // For this simulation, we will just return the original audio data
+  // in a playable WAV format. A real implementation with a local model
+  // would perform the actual audio manipulation here.
+  const b64Data = input.audio.substring(input.audio.indexOf(',') + 1);
+  const pcmData = Buffer.from(b64Data, 'base64');
+  
+  const wavData = await toWav(pcmData);
+
+  return {
+    processedAudio: `data:audio/wav;base64,${wavData}`,
+  };
+}
 
 
 async function toWav(
