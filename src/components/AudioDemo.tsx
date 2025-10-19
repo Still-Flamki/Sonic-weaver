@@ -306,7 +306,8 @@ function DemoPlayerCard({
                 <Image 
                     src={coverImage.imageUrl}
                     alt={coverImage.description}
-                    fill
+                    width={192}
+                    height={192}
                     className="rounded-lg object-cover"
                     data-ai-hint={coverImage.imageHint}
                 />
