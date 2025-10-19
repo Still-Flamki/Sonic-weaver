@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, Ear, Gamepad2, Info, SlidersHorizontal } from 'lucide-react';
+import { ArrowRight, Ear, Gamepad2, Headphones, Info, SlidersHorizontal } from 'lucide-react';
 import AudioDemo from '@/components/AudioDemo';
 import { Badge } from '@/components/ui/badge';
 import AudioGame from '@/components/AudioGame';
@@ -38,6 +38,12 @@ export default function Home() {
                 <p className="mt-4 max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground">
                 Our tools transform your flat audio into an immersive spatial experience. Hear the difference for yourself.
                 </p>
+                <div className="mt-10 flex flex-col items-center gap-4">
+                    <Headphones className="h-16 w-16 text-primary/70" />
+                    <p className="font-semibold text-primary/90">
+                        Plug in your headphones for the best experience
+                    </p>
+                </div>
                 <div className="mt-12">
                 <Button asChild size="lg" className="group">
                     <Link href="/app">
