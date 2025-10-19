@@ -56,6 +56,7 @@ export default function AudioProcessor({
   const [error, setError] = useState<string | null>(null);
   const animationFrameRef = useRef<number>();
   const visualizerCanvasRef = useRef<HTMLCanvasElement>(null);
+  const conversionWorkerRef = useRef<Worker | null>(null);
   
   const [customSpeed, setCustomSpeed] = useState(8);
   const [customWidth, setCustomWidth] = useState(3);
@@ -68,6 +69,37 @@ export default function AudioProcessor({
 
 
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Initialize the conversion worker
+    conversionWorkerRef.current = new (require('@/workers/converter.worker.ts') as any).default();
+
+    conversionWorkerRef.current.onmessage = (event) => {
+        const { type, data, error: workerError, progress } = event.data;
+
+        if (type === 'conversion-complete') {
+            const mp4Blob = new Blob([data], { type: 'video/mp4' });
+            downloadFile(mp4Blob, 'video', 'mp4');
+            setIsRendering(false);
+        } else if (type === 'conversion-error') {
+            console.error('Conversion worker error:', workerError);
+            setError(`Failed to convert video to MP4. ${workerError}`);
+            toast({
+                title: 'Conversion Failed',
+                description: `Could not convert video to MP4.`,
+                variant: 'destructive',
+            });
+            setIsRendering(false);
+        } else if (type === 'conversion-progress') {
+            setRenderMessage('Converting to MP4...');
+            setRenderProgress(progress * 100);
+        }
+    };
+    
+    return () => {
+        conversionWorkerRef.current?.terminate();
+    };
+  }, []);
 
   useEffect(() => {
     if (!audioContext) {
@@ -491,12 +523,11 @@ export default function AudioProcessor({
     return new Blob([bufferArray], { type: 'audio/wav' });
   }
 
-  const downloadFile = (blob: Blob, fileType: 'audio' | 'video') => {
+  const downloadFile = (blob: Blob, fileType: 'audio' | 'video', extension: 'wav' | 'webm' | 'mp4') => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
-    const extension = fileType === 'audio' ? 'wav' : 'webm';
     a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.${extension}`;
     document.body.appendChild(a);
     a.click();
@@ -644,11 +675,22 @@ export default function AudioProcessor({
         if (fileType === 'video') {
             setRenderMessage('Capturing video...');
             const videoBlob = await renderVideo(renderedBuffer);
-            downloadFile(videoBlob, 'video');
+
+            if (conversionWorkerRef.current) {
+                setRenderMessage('Sending to converter...');
+                const arrayBuffer = await videoBlob.arrayBuffer();
+                conversionWorkerRef.current.postMessage({
+                    type: 'convert',
+                    data: arrayBuffer,
+                }, [arrayBuffer]);
+            } else {
+                throw new Error("Conversion worker is not available.");
+            }
 
         } else {
             const wavBlob = bufferToWav(renderedBuffer);
-            downloadFile(wavBlob, 'audio');
+            downloadFile(wavBlob, 'audio', 'wav');
+            setIsRendering(false);
         }
 
     } catch (e) {
@@ -660,9 +702,13 @@ export default function AudioProcessor({
             description: `Could not process the ${fileType}. See console for details.`,
             variant: 'destructive',
         });
-    } finally {
         setIsRendering(false);
-        setRenderProgress(0);
+    } finally {
+        // Reset state, but only if we aren't converting
+        if (fileType === 'audio') {
+            setIsRendering(false);
+            setRenderProgress(0);
+        }
         if (wasPlaying && decodedBuffer) {
           playPreview();
         }
@@ -923,7 +969,7 @@ export default function AudioProcessor({
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleDownload('video')}>
                     <Video className="mr-2 h-4 w-4" />
-                    <span>Video (.webm)</span>
+                    <span>Video (.mp4)</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

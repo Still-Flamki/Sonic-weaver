@@ -30,6 +30,21 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  webpack(config, { isServer }) {
+    if (!isServer) {
+        config.resolve.fallback = {
+            fs: false,
+            path: false,
+        };
+    }
+    
+    config.module.rules.push({
+      test: /\.worker\.ts$/,
+      use: { loader: 'worker-loader' },
+    });
+    
+    return config;
+  },
 };
 
 export default nextConfig;
