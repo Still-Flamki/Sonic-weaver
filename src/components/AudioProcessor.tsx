@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle } from 'lucide-react';
+import { UploadCloud, Download, FileAudio, RotateCw, Play, Pause, XCircle, Sparkles } from 'lucide-react';
 import type { EffectType } from './SonicWeaverApp';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
@@ -145,11 +145,12 @@ export default function AudioProcessor({
         const duration = 6;
         const angle = (Math.PI / duration) * time;
         path = {
-          x: radius * Math.cos(angle - Math.PI / 2),
+          x: radius * 1.5 * Math.cos(angle - Math.PI / 2),
           y: 0,
-          z: -radius * Math.sin(angle) * 0.5, 
+          z: -radius * 1.5 * Math.sin(angle) * 0.5, 
         };
-        // No gain or filter changes for a pure panning effect.
+        gain = 1.0;
+        freq = 22050;
         break;
       }
       case '8D': {
@@ -158,30 +159,28 @@ export default function AudioProcessor({
         const angle = (2 * Math.PI / duration) * time;
         path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
         
-        // Add subtle gain reduction when sound is 'behind' the listener
-        const zNormalized = (path.z + radius) / (2 * radius); // 0 (back) to 1 (front)
-        gain = 0.8 + zNormalized * 0.2; // Volume is 80% at back, 100% at front
+        const zNormalized = (path.z + radius) / (2 * radius);
+        gain = 0.8 + zNormalized * 0.2; 
+        freq = 22050;
         break;
       }
+      case 'AI':
       case '11D': {
         // "Dynamic & Deep": A complex path with pronounced gain and filter automation.
         const duration = 8;
         const x = radius * Math.sin((2 * Math.PI / duration) * time);
-        const z = radius * Math.sin((4 * Math.PI / duration) * time); // Make z movement more pronounced
+        const z = radius * Math.sin((4 * Math.PI / duration) * time);
         const y = Math.cos((2 * Math.PI / (duration * 2)) * time) * 0.5; 
         path = { x, y, z };
         
-        // More pronounced gain automation based on distance from center.
         const distance = Math.sqrt(x * x + y * y + z * z);
         const maxDistance = radius * 1.2; 
         gain = 1.0 - (distance / maxDistance) * 0.5; 
         gain = Math.max(0.5, Math.min(1.0, gain)); 
 
-        // More responsive filter automation based on Z position (front/back)
-        // Sound is brighter in front, darker behind.
-        const baseFreq = 2500; // Lower base for more dramatic effect
+        const baseFreq = 2500;
         const freqRange = 15000;
-        const zNormalized = (z + radius) / (2 * radius); // Normalize Z to 0-1
+        const zNormalized = (z + radius) / (2 * radius);
         freq = baseFreq + (zNormalized * freqRange);
         break;
       }
@@ -204,21 +203,21 @@ export default function AudioProcessor({
     g.disconnect();
     if (convolverNode) convolverNode.disconnect();
     
-    if (effectType === '11D') {
+    if (effectType === '11D' || effectType === 'AI') {
         if (!convolverNode) {
             convolverNode = audioContext.createConvolver();
             convolverNode.buffer = await createReverbImpulseResponse(audioContext);
         }
         
         const dryNode = audioContext.createGain();
-        dryNode.gain.value = 0.75; // a bit more dry signal for clarity
+        dryNode.gain.value = 0.75;
         const wetNode = audioContext.createGain();
-        wetNode.gain.value = 0.25; // a bit more reverb
+        wetNode.gain.value = 0.25;
 
         gainNode.connect(dryNode);
         gainNode.connect(wetNode);
         wetNode.connect(convolverNode);
-        convolverNode.connect(p); // Reverb is also spatialized
+        convolverNode.connect(p);
         dryNode.connect(f);
         f.connect(p);
     } else {
@@ -449,7 +448,7 @@ export default function AudioProcessor({
         offlineSource.connect(offlineGain);
 
         let offlineConvolver: ConvolverNode | null = null;
-        if (effectType === '11D') {
+        if (effectType === '11D' || effectType === 'AI') {
             offlineConvolver = offlineCtx.createConvolver();
             offlineConvolver.buffer = await createReverbImpulseResponse(offlineCtx);
             const dryNode = offlineCtx.createGain();
@@ -577,20 +576,31 @@ export default function AudioProcessor({
                 }
               }, 50);
             }}
-            className="grid grid-cols-3 gap-4"
+            className="grid grid-cols-2 lg:grid-cols-4 gap-4"
             disabled={isBusy}
           >
-            {['4D', '8D', '11D'].map(effect => (
+            {(['4D', '8D', '11D'] as const).map(effect => (
               <Label
                 key={effect}
                 htmlFor={`effect-${effect}`}
                 className="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 transition-all hover:bg-accent/20 hover:border-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:shadow-primary/20 peer-data-[state=checked]:shadow-md [&:has([data-state=checked])]:border-primary"
               >
-                <RadioGroupItem value={effect as EffectType} id={`effect-${effect}`} className="sr-only" />
+                <RadioGroupItem value={effect} id={`effect-${effect}`} className="sr-only" />
                 <span className="text-lg font-semibold font-headline">{effect}</span>
                 <span className="text-xs text-muted-foreground">Audio</span>
               </Label>
             ))}
+            <Label
+                htmlFor="effect-AI"
+                className="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 transition-all hover:bg-accent/20 hover:border-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:shadow-primary/20 peer-data-[state=checked]:shadow-md [&:has([data-state=checked])]:border-primary"
+              >
+                <RadioGroupItem value={'AI'} id="effect-AI" className="sr-only" />
+                 <span className="relative flex items-center text-lg font-semibold font-headline">
+                   <Sparkles className="mr-2 h-4 w-4 text-primary/80" />
+                   AI
+                 </span>
+                <span className="text-xs text-muted-foreground">Enhanced</span>
+              </Label>
           </RadioGroup>
         </div>
         
