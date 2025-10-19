@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, forwardRef } from 'react';
 
-export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'fabric' | 'skyline' | 'chromatic' | 'bloom' | 'genesis';
+export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'fabric' | 'skyline' | 'chromatic' | 'bloom';
 
 interface AudioVisualizerProps {
   analyserNode: AnalyserNode | null;
@@ -409,87 +409,7 @@ const drawChromatic = (
     ctx.globalCompositeOperation = 'source-over'; // Reset composite operation
   };
 
-  const drawGenesis = (
-    ctx: CanvasRenderingContext2D,
-    analyser: AnalyserNode,
-    dataArray: Uint8Array,
-    width: number,
-    height: number,
-    time: number
-  ) => {
-    analyser.getByteTimeDomainData(dataArray);
-    const freqData = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteFrequencyData(freqData);
-
-    // --- Background & Gravity Warp ---
-    const subBass = freqData.slice(0, 2).reduce((s, v) => s + v, 0) / 2 / 255;
-    const warpFactor = 1.0 + subBass * 0.05;
-    ctx.save();
-    ctx.translate(width / 2, height / 2);
-    ctx.scale(warpFactor, warpFactor);
-    ctx.translate(-width / 2, -height / 2);
-    ctx.fillStyle = 'rgba(10, 18, 28, 0.3)';
-    ctx.fillRect(0, 0, width, height);
-    
-    // --- Particle Field ---
-    drawFabric(ctx, analyser, dataArray, width, height, time);
-
-    // --- Central Orb ---
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const bass = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
-    const mids = freqData.slice(10, 50).reduce((s, v) => s + v, 0) / 40 / 255;
-    
-    const coreSize = 10 + bass * 40;
-
-    // Outer corona
-    const coronaGradient = ctx.createRadialGradient(centerX, centerY, coreSize * 0.8, centerX, centerY, coreSize * 2.5);
-    coronaGradient.addColorStop(0, `rgba(255, 180, 80, ${mids * 0.2})`);
-    coronaGradient.addColorStop(1, 'rgba(10, 18, 28, 0)');
-    ctx.fillStyle = coronaGradient;
-    ctx.fillRect(0, 0, width, height);
-    
-    // Inner core
-    const coreGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreSize);
-    coreGradient.addColorStop(0, `rgba(255, 255, 220, ${0.5 + bass * 0.5})`);
-    coreGradient.addColorStop(0.5, `rgba(255, 200, 100, ${0.3 + bass * 0.4})`);
-    coreGradient.addColorStop(1, `rgba(255, 100, 0, ${bass * 0.5})`);
-    ctx.fillStyle = coreGradient;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, coreSize, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // --- Waveform Solar Flares ---
-    ctx.lineWidth = 1.5 + mids * 2;
-    const bufferLength = dataArray.length;
-    const numFlares = 4;
-    for (let j = 0; j < numFlares; j++) {
-        ctx.beginPath();
-        const rotation = (j / numFlares) * Math.PI * 2 + (time * 0.00005);
-        let moved = false;
-        for (let i = 0; i < bufferLength; i += 4) {
-            const v = dataArray[i] / 128.0; // 0-2
-            const arcRadius = coreSize + (v - 1) * (height * 0.1) * mids;
-            const angle = (i / bufferLength) * Math.PI * 1.5 - Math.PI / 4;
-
-            const x = centerX + arcRadius * Math.cos(angle + rotation);
-            const y = centerY + arcRadius * Math.sin(angle + rotation);
-
-            if (!moved) {
-                ctx.moveTo(x, y);
-                moved = true;
-            } else {
-                ctx.lineTo(x, y);
-            }
-        }
-        const flareColor = `rgba(255, 220, 180, ${0.2 + mids * 0.6})`;
-        ctx.strokeStyle = flareColor;
-        ctx.stroke();
-    }
-    ctx.restore(); // Restore from gravity warp
-};
-
-const drawBloom = (
+  const drawBloom = (
     ctx: CanvasRenderingContext2D,
     analyser: AnalyserNode,
     dataArray: Uint8Array,
@@ -591,7 +511,7 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     if(!canvasCtx) return;
 
     // Different visualizers prefer different data
-    if (['orb', 'fabric', 'bloom', 'genesis'].includes(visualizationType)) {
+    if (['orb', 'fabric', 'bloom'].includes(visualizationType)) {
         analyserNode.fftSize = 1024;
     } else { // bars, tunnel, skyline, chromatic
         analyserNode.fftSize = 256;
@@ -635,9 +555,6 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
             break;
         case 'chromatic':
             drawChromatic(canvasCtx, analyserNode, dataArray, width, height);
-            break;
-        case 'genesis':
-            drawGenesis(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
             break;
         case 'bloom':
             drawBloom(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);

@@ -61,7 +61,7 @@ export default function AudioProcessor({
   const [customMid, setCustomMid] = useState(0);
   const [customTreble, setCustomTreble] = useState(0);
   const [customMovement, setCustomMovement] = useState<MovementPath>('Figure-8');
-  const [visualizationType, setVisualizationType] = useState<VisualizationType>('genesis');
+  const [visualizationType, setVisualizationType] = useState<VisualizationType>('fabric');
 
 
   const { toast } = useToast();
@@ -810,8 +810,7 @@ a.remove();
                         <SelectValue placeholder="Select a visualization" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="genesis">Genesis Orb</SelectItem>
-                        <SelectItem value="fabric">Quantum Fabric</SelectItem>
+                        <SelectItem value="fabric">Aether Weaver</SelectItem>
                         <SelectItem value="bloom">Fractal Bloom</SelectItem>
                         <SelectItem value="chromatic">Chromatic Aberration</SelectItem>
                         <SelectItem value="skyline">Neon Skyline</SelectItem>
