@@ -137,9 +137,19 @@ export default function AudioGame() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Card className="shadow-lg bg-card/50 backdrop-blur-sm border-accent/20 shadow-accent/10 overflow-hidden">
-        <div className="grid md:grid-cols-2">
-            <CardContent className="p-8 md:p-10 flex flex-col justify-between">
+      <Card className="relative shadow-lg bg-card/50 backdrop-blur-sm border-accent/20 shadow-accent/10 overflow-hidden">
+        {gameImage && (
+            <Image
+                src={gameImage.imageUrl}
+                alt={gameImage.description}
+                fill
+                className="object-cover"
+                data-ai-hint={gameImage.imageHint}
+            />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-background via-background/70 to-transparent"></div>
+        <div className="relative grid md:grid-cols-2">
+            <CardContent className="p-8 md:p-10 flex flex-col justify-between min-h-[450px]">
                 <div>
                   <CardTitle className="font-headline text-2xl tracking-tight mb-2">
                     Where is the sound?
@@ -209,18 +219,8 @@ export default function AudioGame() {
                     }
                 </div>
             </CardContent>
-            <div className="hidden md:block relative min-h-[300px]">
-                {gameImage && (
-                    <Image
-                        src={gameImage.imageUrl}
-                        alt={gameImage.description}
-                        fill
-                        className="object-cover"
-                        data-ai-hint={gameImage.imageHint}
-                    />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-background via-background/70 to-transparent"></div>
-            </div>
+            {/* The right column is now primarily for spacing on desktop */}
+            <div className="hidden md:block"></div>
         </div>
       </Card>
     </div>
