@@ -30,6 +30,10 @@ let compressorNode: DynamicsCompressorNode | null = null;
 let dryNode: GainNode | null = null;
 let wetNode: GainNode | null = null;
 
+let lowShelfFilter: BiquadFilterNode | null = null;
+let midPeakingFilter: BiquadFilterNode | null = null;
+let highShelfFilter: BiquadFilterNode | null = null;
+
 
 export default function AudioProcessor({
   effectType,
@@ -47,6 +51,10 @@ export default function AudioProcessor({
   const [customSpeed, setCustomSpeed] = useState(8);
   const [customWidth, setCustomWidth] = useState(3);
   const [customReverb, setCustomReverb] = useState(0.25);
+  const [customBass, setCustomBass] = useState(0);
+  const [customMid, setCustomMid] = useState(0);
+  const [customTreble, setCustomTreble] = useState(0);
+
 
   const { toast } = useToast();
 
@@ -73,11 +81,14 @@ export default function AudioProcessor({
   }, []);
   
   useEffect(() => {
-    if (isPlaying && effectType === 'Custom' && wetNode && dryNode) {
-      wetNode.gain.value = customReverb;
-      dryNode.gain.value = 1 - customReverb;
+    if (isPlaying && effectType === 'Custom') {
+        if(wetNode?.gain) wetNode.gain.value = customReverb;
+        if(dryNode?.gain) dryNode.gain.value = 1 - customReverb;
+        if(lowShelfFilter?.gain) lowShelfFilter.gain.value = customBass;
+        if(midPeakingFilter?.gain) midPeakingFilter.gain.value = customMid;
+        if(highShelfFilter?.gain) highShelfFilter.gain.value = customTreble;
     }
-  }, [customReverb, isPlaying, effectType]);
+  }, [customReverb, customBass, customMid, customTreble, isPlaying, effectType]);
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -205,47 +216,90 @@ export default function AudioProcessor({
     return { ...path, gain, freq };
   };
 
-  const startSpatialAnimation = async () => {
-    if (!audioContext || !pannerNode || !filterNode || !gainNode || !compressorNode) return;
-  
-    const p = pannerNode;
-    const f = filterNode;
-    const g = gainNode;
-    const c = compressorNode;
+  const setupAudioGraph = async (context: AudioContext | OfflineAudioContext) => {
+    // Universal nodes
+    gainNode = context.createGain();
+    pannerNode = context.createPanner();
+    pannerNode.panningModel = 'HRTF';
+    pannerNode.distanceModel = 'inverse';
     
-    // Clear previous connections
-    g.disconnect();
-    if (convolverNode) convolverNode.disconnect();
-    if (dryNode) dryNode.disconnect();
-    if (wetNode) wetNode.disconnect();
-    
+    filterNode = context.createBiquadFilter(); // This is the dynamic low-pass filter for spatial effects
+    filterNode.type = 'lowpass';
+    filterNode.Q.value = 1;
+
+    // EQ Nodes (for Custom mode)
+    lowShelfFilter = context.createBiquadFilter();
+    lowShelfFilter.type = 'lowshelf';
+    lowShelfFilter.frequency.value = 320; // Bass frequencies
+    lowShelfFilter.gain.value = effectType === 'Custom' ? customBass : 0;
+
+    midPeakingFilter = context.createBiquadFilter();
+    midPeakingFilter.type = 'peaking';
+    midPeakingFilter.frequency.value = 1000; // Mid frequencies
+    midPeakingFilter.Q.value = 1;
+    midPeakingFilter.gain.value = effectType === 'Custom' ? customMid : 0;
+
+    highShelfFilter = context.createBiquadFilter();
+    highShelfFilter.type = 'highshelf';
+    highShelfFilter.frequency.value = 3200; // Treble frequencies
+    highShelfFilter.gain.value = effectType === 'Custom' ? customTreble : 0;
+
+
     const shouldUseReverb = effectType === '11D' || effectType === 'Custom';
     const reverbAmount = effectType === 'Custom' ? customReverb : 0.25;
 
+    // Connect EQ chain: gain -> low -> mid -> high
+    gainNode.connect(lowShelfFilter);
+    lowShelfFilter.connect(midPeakingFilter);
+    midPeakingFilter.connect(highShelfFilter);
+
+    let lastNodeInChain: AudioNode = highShelfFilter;
+
     if (shouldUseReverb) {
         if (!convolverNode) {
-            convolverNode = audioContext.createConvolver();
-            convolverNode.buffer = await createReverbImpulseResponse(audioContext);
+            convolverNode = context.createConvolver();
+            convolverNode.buffer = await createReverbImpulseResponse(context as BaseAudioContext);
         }
-        if (!dryNode) dryNode = audioContext.createGain();
-        if (!wetNode) wetNode = audioContext.createGain();
+        if (!dryNode) dryNode = context.createGain();
+        if (!wetNode) wetNode = context.createGain();
         
         dryNode.gain.value = 1 - reverbAmount;
         wetNode.gain.value = reverbAmount;
 
-        gainNode.connect(dryNode);
-        gainNode.connect(wetNode);
+        lastNodeInChain.connect(dryNode);
+        lastNodeInChain.connect(wetNode);
         wetNode.connect(convolverNode);
-        convolverNode.connect(p);
-        dryNode.connect(f);
-        f.connect(p);
+        convolverNode.connect(pannerNode);
+        dryNode.connect(filterNode);
+        filterNode.connect(pannerNode);
     } else {
-        // For 4D and 8D, no reverb
-        gainNode.connect(f);
-        f.connect(p);
+        lastNodeInChain.connect(filterNode);
+        filterNode.connect(pannerNode);
     }
     
-    p.connect(c); // Connect effect chain to the compressor
+    if (context instanceof OfflineAudioContext) {
+      const offlineCompressor = context.createDynamicsCompressor();
+      offlineCompressor.threshold.value = -25;
+      offlineCompressor.knee.value = 30;
+      offlineCompressor.ratio.value = 12;
+      offlineCompressor.attack.value = 0.003;
+      offlineCompressor.release.value = 0.25;
+      pannerNode.connect(offlineCompressor);
+      offlineCompressor.connect(context.destination);
+      return { gainNode, pannerNode, filterNode, lowShelfFilter, midPeakingFilter, highShelfFilter };
+    } else if (compressorNode) {
+        pannerNode.connect(compressorNode);
+    }
+};
+
+  const startSpatialAnimation = async () => {
+    if (!audioContext || !pannerNode || !filterNode || !gainNode) return;
+  
+    const p = pannerNode;
+    const f = filterNode;
+    const g = gainNode;
+    
+    await setupAudioGraph(audioContext);
 
     const startTime = audioContext.currentTime;
 
@@ -284,16 +338,6 @@ export default function AudioProcessor({
     sourceNode.buffer = decodedBuffer;
     sourceNode.loop = true;
 
-    pannerNode = audioContext.createPanner();
-    pannerNode.panningModel = 'HRTF';
-    pannerNode.distanceModel = 'inverse';
-    
-    filterNode = audioContext.createBiquadFilter();
-    filterNode.type = 'lowpass';
-    filterNode.Q.value = 1;
-
-    gainNode = audioContext.createGain();
-
     if(audioContext.listener.positionX) {
       audioContext.listener.positionX.value = 0;
       audioContext.listener.positionY.value = 0;
@@ -302,15 +346,14 @@ export default function AudioProcessor({
        audioContext.listener.setPosition(0,0,0);
     }
     
-    sourceNode.connect(gainNode);
-    
-    sourceNode.onended = () => {
-      // Don't set isPlaying to false here, as it can be a loop
-    };
+    await startSpatialAnimation();
+
+    if (gainNode) {
+       sourceNode.connect(gainNode);
+    }
     
     sourceNode.start(0);
     setIsPlaying(true);
-    await startSpatialAnimation();
   };
 
   const stopPreview = () => {
@@ -333,7 +376,9 @@ export default function AudioProcessor({
     convolverNode?.disconnect();
     dryNode?.disconnect();
     wetNode?.disconnect();
-
+    lowShelfFilter?.disconnect();
+    midPeakingFilter?.disconnect();
+    highShelfFilter?.disconnect();
     
     setIsPlaying(false);
   };
@@ -442,25 +487,16 @@ export default function AudioProcessor({
         // Re-create the full audio graph for the offline context
         const offlineSource = offlineCtx.createBufferSource();
         offlineSource.buffer = decodedBuffer;
-
-        const offlinePanner = offlineCtx.createPanner();
-        offlinePanner.panningModel = 'HRTF';
-        offlinePanner.distanceModel = 'inverse';
-
-        const offlineFilter = offlineCtx.createBiquadFilter();
-        offlineFilter.type = 'lowpass';
-        offlineFilter.Q.value = 1;
         
-        const offlineGain = offlineCtx.createGain();
+        const graph = await setupAudioGraph(offlineCtx) as {
+            gainNode: GainNode;
+            pannerNode: PannerNode;
+            filterNode: BiquadFilterNode;
+            lowShelfFilter: BiquadFilterNode;
+            midPeakingFilter: BiquadFilterNode;
+            highShelfFilter: BiquadFilterNode;
+        };
 
-        const offlineCompressor = offlineCtx.createDynamicsCompressor();
-        offlineCompressor.threshold.value = -25;
-        offlineCompressor.knee.value = 30;
-        offlineCompressor.ratio.value = 12;
-        offlineCompressor.attack.value = 0.003;
-        offlineCompressor.release.value = 0.25;
-        offlineCompressor.connect(offlineCtx.destination);
-        
 
         if(offlineCtx.listener.positionX) {
             offlineCtx.listener.positionX.value = 0;
@@ -470,39 +506,17 @@ export default function AudioProcessor({
             offlineCtx.listener.setPosition(0,0,0);
         }
 
-        offlineSource.connect(offlineGain);
+        offlineSource.connect(graph.gainNode);
 
-        const shouldUseReverb = effectType === '11D' || effectType === 'Custom';
-        const reverbAmount = effectType === 'Custom' ? customReverb : 0.25;
-        let offlineConvolver: ConvolverNode | null = null;
-        if (shouldUseReverb) {
-            offlineConvolver = offlineCtx.createConvolver();
-            offlineConvolver.buffer = await createReverbImpulseResponse(offlineCtx);
-            const dryNode = offlineCtx.createGain();
-            dryNode.gain.value = 1 - reverbAmount;
-            const wetNode = offlineCtx.createGain();
-            wetNode.gain.value = reverbAmount;
-            offlineGain.connect(dryNode);
-            offlineGain.connect(wetNode);
-            wetNode.connect(offlineConvolver);
-            offlineConvolver.connect(offlinePanner);
-            dryNode.connect(offlineFilter);
-            offlineFilter.connect(offlinePanner);
-        } else {
-            offlineGain.connect(offlineFilter);
-            offlineFilter.connect(offlinePanner);
-        }
-        offlinePanner.connect(offlineCompressor);
-        
         const timeStep = 0.05;
         for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
             const { x, y, z, gain, freq } = getAnimationPath(time);
             const rampTime = time + timeStep;
-            offlinePanner.positionX.linearRampToValueAtTime(x, rampTime);
-            offlinePanner.positionY.linearRampToValueAtTime(y, rampTime);
-            offlinePanner.positionZ.linearRampToValueAtTime(z, rampTime);
-            offlineFilter.frequency.linearRampToValueAtTime(freq, rampTime);
-            offlineGain.gain.linearRampToValueAtTime(gain, rampTime);
+            graph.pannerNode.positionX.linearRampToValueAtTime(x, rampTime);
+            graph.pannerNode.positionY.linearRampToValueAtTime(y, rampTime);
+            graph.pannerNode.positionZ.linearRampToValueAtTime(z, rampTime);
+            graph.filterNode.frequency.linearRampToValueAtTime(freq, rampTime);
+            graph.gainNode.gain.linearRampToValueAtTime(gain, rampTime);
         }
 
         offlineSource.start(0);
@@ -518,7 +532,7 @@ export default function AudioProcessor({
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(url);
-a.remove();
+        a.remove();
         
         toast({
             title: 'Download Ready!',
@@ -644,7 +658,7 @@ a.remove();
                         min={1} max={15}
                         value={[customSpeed]}
                         onValueChange={(val) => setCustomSpeed(val[0])}
-                        disabled={isBusy || !isPlaying}
+                        disabled={isBusy}
                     />
                      <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Slow</span>
@@ -658,7 +672,7 @@ a.remove();
                         min={1} max={10}
                         value={[customWidth]}
                         onValueChange={(val) => setCustomWidth(val[0])}
-                        disabled={isBusy || !isPlaying}
+                        disabled={isBusy}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Narrow</span>
@@ -672,11 +686,53 @@ a.remove();
                         min={0} max={1} step={0.05}
                         value={[customReverb]}
                         onValueChange={(val) => setCustomReverb(val[0])}
-                        disabled={isBusy || !isPlaying}
+                        disabled={isBusy}
                     />
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Dry</span>
                         <span>Wet</span>
+                    </div>
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="bass-slider">Bass</Label>
+                    <Slider
+                        id="bass-slider"
+                        min={-10} max={10} step={1}
+                        value={[customBass]}
+                        onValueChange={(val) => setCustomBass(val[0])}
+                        disabled={isBusy}
+                    />
+                     <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>-10dB</span>
+                        <span>+10dB</span>
+                    </div>
+                </div>
+                 <div className="grid gap-2">
+                    <Label htmlFor="mid-slider">Mids</Label>
+                    <Slider
+                        id="mid-slider"
+                        min={-10} max={10} step={1}
+                        value={[customMid]}
+                        onValueChange={(val) => setCustomMid(val[0])}
+                        disabled={isBusy}
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>-10dB</span>
+                        <span>+10dB</span>
+                    </div>
+                </div>
+                 <div className="grid gap-2">
+                    <Label htmlFor="treble-slider">Treble</Label>
+                    <Slider
+                        id="treble-slider"
+                        min={-10} max={10} step={1}
+                        value={[customTreble]}
+                        onValueChange={(val) => setCustomTreble(val[0])}
+                        disabled={isBusy}
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>-10dB</span>
+                        <span>+10dB</span>
                     </div>
                 </div>
             </CardContent>
@@ -717,5 +773,3 @@ a.remove();
     </Card>
   );
 }
-
-    
