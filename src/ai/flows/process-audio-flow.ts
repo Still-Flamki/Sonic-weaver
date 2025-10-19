@@ -33,9 +33,6 @@ export type ProcessAudioOutput = z.infer<typeof ProcessAudioOutputSchema>;
  * @returns The processed audio data.
  */
 export async function processAudio(input: ProcessAudioInput): Promise<ProcessAudioOutput> {
-  // Simulate processing delay to mimic a real-world scenario.
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
   // For this simulation, we will just return the original audio data
   // in a playable WAV format. A real implementation with a local model
   // would perform the actual audio manipulation here.
