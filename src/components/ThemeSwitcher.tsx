@@ -17,14 +17,14 @@ const themes = [
 
 export function ThemeSwitcher() {
   const [mounted, setMounted] = useState(false);
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   if (!mounted) {
-    // Render a placeholder on the server and during hydration to avoid mismatch
+    // Render a placeholder on the server to avoid hydration mismatch
     return <div className="h-6 w-full max-w-[200px] animate-pulse rounded-full bg-muted/50" />;
   }
 
@@ -32,7 +32,7 @@ export function ThemeSwitcher() {
     <TooltipProvider delayDuration={0}>
       <div className="flex items-center gap-2">
         {themes.map((t) => {
-           const isActive = theme === t.value || resolvedTheme === t.value;
+           const isActive = resolvedTheme === t.value;
           return (
           <Tooltip key={t.value}>
             <TooltipTrigger asChild>
@@ -47,7 +47,7 @@ export function ThemeSwitcher() {
                 }}
                 aria-label={`Switch to ${t.name} theme`}
               >
-                 <div className={cn("h-full w-full rounded-full", t.value === 'dark' || t.value === 'light' ? 'border-2 border-foreground/30' : '')}/>
+                 <div className={cn("h-full w-full rounded-full", (t.value === 'dark' || t.value === 'light') ? 'border-2 border-foreground/30' : '')}/>
               </button>
             </TooltipTrigger>
             <TooltipContent>
