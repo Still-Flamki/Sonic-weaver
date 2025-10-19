@@ -44,18 +44,37 @@ export default function AudioDemo() {
   }, [toast]);
 
   const createDemoBuffer = (context: AudioContext) => {
-    const duration = 2; // seconds
     const sampleRate = context.sampleRate;
-    const frameCount = sampleRate * duration;
+    const tempo = 140; // BPM
+    const noteDuration = 60 / tempo; // Duration of one beat in seconds
+    const totalDuration = noteDuration * 8; // 8 notes
+    
+    const frameCount = sampleRate * totalDuration;
     const newBuffer = context.createBuffer(1, frameCount, sampleRate);
     const data = newBuffer.getChannelData(0);
-    
-    // Create a simple sine wave tone
-    const frequency = 440; // A4 note
-    for (let i = 0; i < frameCount; i++) {
-        const time = i / sampleRate;
-        data[i] = Math.sin(2 * Math.PI * frequency * time) * 0.5; // * 0.5 to prevent clipping
+
+    const notes = [
+      261.63, // C4
+      329.63, // E4
+      392.00, // G4
+      523.25, // C5
+      392.00, // G4
+      329.63, // E4
+      261.63, // C4
+      196.00  // G3
+    ];
+
+    for (let i = 0; i < notes.length; i++) {
+      const freq = notes[i];
+      const startSample = Math.floor(i * noteDuration * sampleRate);
+      const endSample = Math.floor((i + 1) * noteDuration * sampleRate);
+      for (let j = startSample; j < endSample; j++) {
+        const time = (j - startSample) / sampleRate;
+        const envelope = 1 - (j - startSample) / (endSample - startSample); // simple decay
+        data[j] = Math.sin(2 * Math.PI * freq * time) * 0.3 * envelope;
+      }
     }
+    
     buffer.current = newBuffer;
   };
 
