@@ -27,10 +27,10 @@ export default function AudioDemo() {
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         // Set up mastering compressor
         compressorNode = audioContext.createDynamicsCompressor();
-        compressorNode.threshold.value = -25; // Good starting point
-        compressorNode.knee.value = 30;
-        compressorNode.ratio.value = 12;
-        compressorNode.attack.value = 0.003;
+        compressorNode.threshold.value = -18; // More headroom
+        compressorNode.knee.value = 20;
+        compressorNode.ratio.value = 8; // Less aggressive ratio
+        compressorNode.attack.value = 0.005;
         compressorNode.release.value = 0.25;
         compressorNode.connect(audioContext.destination);
 
@@ -87,16 +87,18 @@ export default function AudioDemo() {
 
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
-    const duration = 3.5;
-    const decay = 2.5;
+    const duration = 2.5;
+    const decay = 3;
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
-
-    for (let i = 0; i < impulse.length; i++) {
-        const n = i / impulse.length;
-        left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
-        right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+    const len = impulse.length;
+    for (let i = 0; i < len; i++) {
+        const t = i / rate;
+        // Use a decaying noise, but modulate it slightly for a more natural tail
+        const envelope = Math.pow(1 - t / duration, decay);
+        left[i] = (Math.random() * 2 - 1) * envelope;
+        right[i] = (Math.random() * 2 - 1) * envelope;
     }
     return impulse;
   };
@@ -110,15 +112,22 @@ export default function AudioDemo() {
     // 11D: Figure-eight path with pronounced dynamics and filtering
     const duration = 8;
     const x = radius * Math.sin((2 * Math.PI / duration) * time);
-    const z = radius * Math.cos((2 * Math.PI / duration) * time); // Corrected to use cos for full front-back motion
+    const z = radius * Math.cos((2 * Math.PI / duration) * time);
     const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
     path = { x, y, z };
     
     // Gain automation based on distance from center.
     const distance = Math.sqrt(x * x + y * y + z * z);
-    const minGain = 0.5; // The quietest the sound can get
-    const maxGain = 0.9; // The loudest it can get (prevents clipping when close)
-    gain = maxGain - (distance / radius) * (maxGain - minGain);
+    const minGain = 0.5; 
+    const maxGain = 0.9;
+    
+    // Compensate for proximity: reduce gain as sound gets closer than a certain threshold
+    const proximityThreshold = 1.0; // Start reducing gain when closer than this distance
+    if (distance < proximityThreshold) {
+        gain = minGain + (distance / proximityThreshold) * (maxGain - minGain);
+    } else {
+        gain = maxGain - ((distance - proximityThreshold) / (radius - proximityThreshold)) * (maxGain - minGain);
+    }
     gain = Math.max(minGain, Math.min(maxGain, gain));
 
     // Filter automation based on Z position (front/back)
@@ -147,9 +156,9 @@ export default function AudioDemo() {
     }
     
     const dryNode = audioContext.createGain();
-    dryNode.gain.value = 0.75; // a bit more dry signal for clarity
+    dryNode.gain.value = 0.75; 
     const wetNode = audioContext.createGain();
-    wetNode.gain.value = 0.25; // a bit more reverb
+    wetNode.gain.value = 0.25; 
 
     // Route audio through the effect chain
     gainNode.connect(dryNode);
@@ -208,7 +217,7 @@ export default function AudioDemo() {
 
       filterNode = audioContext.createBiquadFilter();
       filterNode.type = 'lowpass';
-      filterNode.Q.value = 1;
+      filterNode.Q.value = 0.7; // Smoother Q value
       
       if (audioContext.listener.positionX) {
         audioContext.listener.positionX.value = 0;
@@ -310,3 +319,5 @@ function DemoPlayerCard({
     </Card>
   );
 }
+
+    

@@ -67,10 +67,10 @@ export default function AudioProcessor({
         audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         // Set up a mastering compressor at the end of the chain
         compressorNode = audioContext.createDynamicsCompressor();
-        compressorNode.threshold.value = -25; // Don't compress too much
-        compressorNode.knee.value = 30;      // Soft knee for smooth compression
-        compressorNode.ratio.value = 12;      // Standard compression ratio
-        compressorNode.attack.value = 0.003;  // Fast attack
+        compressorNode.threshold.value = -18; // Give more headroom before compressing
+        compressorNode.knee.value = 20;      // Softer knee
+        compressorNode.ratio.value = 8;     // Less aggressive ratio
+        compressorNode.attack.value = 0.005; // Slightly slower attack
         compressorNode.release.value = 0.25;  // Medium release
         compressorNode.connect(audioContext.destination);
       } catch (e) {
@@ -158,16 +158,18 @@ export default function AudioProcessor({
 
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
-    const duration = 3.5; 
-    const decay = 2.5; 
+    const duration = 2.5;
+    const decay = 3;
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
-
-    for (let i = 0; i < impulse.length; i++) {
-        const n = i / impulse.length;
-        left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
-        right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+    const len = impulse.length;
+    for (let i = 0; i < len; i++) {
+        const t = i / rate;
+        // Use a decaying noise, but modulate it slightly for a more natural tail
+        const envelope = Math.pow(1 - t / duration, decay);
+        left[i] = (Math.random() * 2 - 1) * envelope;
+        right[i] = (Math.random() * 2 - 1) * envelope;
     }
     return impulse;
   };
@@ -193,9 +195,9 @@ export default function AudioProcessor({
         path = {
           x: radius * Math.sin(angle),
           y: 0,
-          z: radius * (Math.sin(angle * 2) - 1),
+          z: radius * (Math.cos(angle) * 2 - 1),
         };
-        gain = 1.0;
+        gain = 0.9;
         freq = 22050;
         break;
       }
@@ -203,7 +205,7 @@ export default function AudioProcessor({
       case 'Circle': {
         const angle = (2 * Math.PI / duration) * time;
         path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
-        gain = 1.0; // Constant gain for 8D
+        gain = 0.9; // Constant gain for 8D
         freq = 22050;
         break;
       }
@@ -215,8 +217,8 @@ export default function AudioProcessor({
         path = { x, y, z };
         
         const distance = Math.sqrt(x * x + y * y + z * z);
-        const minGain = 0.5; // The quietest the sound can get
-        const maxGain = 0.9; // The loudest it can get
+        const minGain = 0.5; 
+        const maxGain = 0.9;
         
         // Compensate for proximity: reduce gain as sound gets closer than a certain threshold
         const proximityThreshold = 1.0; // Start reducing gain when closer than this distance
@@ -249,7 +251,7 @@ export default function AudioProcessor({
     
     filterNode = context.createBiquadFilter(); // This is the dynamic low-pass filter for spatial effects
     filterNode.type = 'lowpass';
-    filterNode.Q.value = 1;
+    filterNode.Q.value = 0.7; // Smoother Q value
 
     // EQ Nodes (for Custom mode)
     lowShelfFilter = context.createBiquadFilter();
@@ -283,7 +285,8 @@ export default function AudioProcessor({
 
     if (shouldUseReverb && lastNodeInChain) {
         convolverNode = context.createConvolver();
-        convolverNode.buffer = await createReverbImpulseResponse(context as BaseAudioContext);
+        const impulse = await createReverbImpulseResponse(context as BaseAudioContext);
+        if (impulse) convolverNode.buffer = impulse;
 
         dryNode = context.createGain();
         wetNode = context.createGain();
@@ -298,28 +301,31 @@ export default function AudioProcessor({
 
         if (filterNode && pannerNode) {
           dryNode.connect(filterNode);
-          filterNode.connect(pannerNode);
           convolverNode.connect(pannerNode);
+          filterNode.connect(pannerNode);
         }
     } else if (lastNodeInChain && filterNode && pannerNode) {
         lastNodeInChain.connect(filterNode);
         filterNode.connect(pannerNode);
     }
     
+    let finalNode = pannerNode;
     if (context instanceof OfflineAudioContext) {
       const offlineCompressor = context.createDynamicsCompressor();
-      offlineCompressor.threshold.value = -25;
-      offlineCompressor.knee.value = 30;
-      offlineCompressor.ratio.value = 12;
-      offlineCompressor.attack.value = 0.003;
+      offlineCompressor.threshold.value = -18;
+      offlineCompressor.knee.value = 20;
+      offlineCompressor.ratio.value = 8;
+      offlineCompressor.attack.value = 0.005;
       offlineCompressor.release.value = 0.25;
       if (pannerNode) pannerNode.connect(offlineCompressor);
       offlineCompressor.connect(context.destination);
+      finalNode = offlineCompressor;
     } else if (compressorNode && pannerNode) {
         pannerNode.connect(compressorNode);
+        finalNode = compressorNode;
     }
 
-    return { gainNode, pannerNode, filterNode, lowShelfFilter, midPeakingFilter, highShelfFilter };
+    return { gainNode, pannerNode, filterNode, lowShelfFilter, midPeakingFilter, highShelfFilter, finalNode };
 };
 
   const startSpatialAnimation = async () => {
@@ -555,7 +561,7 @@ export default function AudioProcessor({
         a.href = url;
         a.download = `sonic-weaver-${effectType}-${audioFile?.name.replace(/\.[^/.]+$/, "") || 'track'}.wav`;
         document.body.appendChild(a);
-        a.click();
+a.click();
         URL.revokeObjectURL(url);
         a.remove();
         
@@ -836,3 +842,5 @@ function VintageSwitch({ label, isActive, onToggle, disabled }: VintageSwitchPro
     </button>
   );
 }
+
+    
