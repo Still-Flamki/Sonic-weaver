@@ -813,6 +813,7 @@ export default function AudioProcessor({
                         <SelectItem value="orb">Orb</SelectItem>
                         <SelectItem value="bars">Bars</SelectItem>
                         <SelectItem value="tunnel">Tunnel</SelectItem>
+                        <SelectItem value="petal">Petal Bloom</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

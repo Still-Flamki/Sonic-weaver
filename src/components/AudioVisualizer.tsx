@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, forwardRef } from 'react';
 
-export type VisualizationType = 'orb' | 'bars' | 'tunnel';
+export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'petal';
 
 interface AudioVisualizerProps {
   analyserNode: AnalyserNode | null;
@@ -118,8 +118,6 @@ const drawTunnel = (
     const centerY = height / 2;
     const bufferLength = analyser.frequencyBinCount;
   
-    let overallLevel = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength / 255;
-  
     const numCircles = 32;
     const depth = 20;
   
@@ -150,6 +148,73 @@ const drawTunnel = (
     }
   };
 
+const drawPetal = (
+    ctx: CanvasRenderingContext2D,
+    analyser: AnalyserNode,
+    dataArray: Uint8Array,
+    width: number,
+    height: number,
+    time: number
+  ) => {
+    analyser.getByteTimeDomainData(dataArray);
+    ctx.fillStyle = 'rgba(10, 18, 28, 0.2)';
+    ctx.fillRect(0, 0, width, height);
+  
+    const bufferLength = dataArray.length;
+    const centerX = width / 2;
+    const centerY = height / 2;
+  
+    const bassLevel = dataArray.slice(0, bufferLength / 4).reduce((sum, val) => sum + Math.abs(val - 128), 0) / (bufferLength / 4);
+    const intensity = Math.min(1, bassLevel / 60);
+  
+    const numPetals = 8;
+    const rotationSpeed = 0.0001;
+    const rotation = time * rotationSpeed;
+  
+    ctx.lineWidth = 1 + intensity * 3;
+  
+    for (let i = 0; i < numPetals; i++) {
+      const petalAngle = rotation + (i / numPetals) * Math.PI * 2;
+  
+      ctx.beginPath();
+      let moved = false;
+  
+      for (let j = 0; j < bufferLength; j += 4) { // Step through waveform data
+        const v = dataArray[j] / 128.0; // Normalize from 0-255 to 0-2
+        const normalizedV = (v - 1); // Normalize to -1 to 1
+        
+        // Base radius grows with bass
+        const baseRadius = width * 0.05 + intensity * width * 0.2;
+        
+        // The waveform creates the petal's edge
+        const waveOffset = normalizedV * height * 0.15;
+  
+        const radius = baseRadius + waveOffset;
+  
+        // Angle within the petal arc
+        const petalWidth = Math.PI / numPetals;
+        const angle = petalAngle - petalWidth / 2 + (j / bufferLength) * petalWidth;
+  
+        const x = centerX + Math.cos(angle) * radius;
+        const y = centerY + Math.sin(angle) * radius;
+  
+        if (!moved) {
+          ctx.moveTo(x, y);
+          moved = true;
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      
+      const r = 59 * (1 - intensity) + 20;
+      const g = 130 * (1 - intensity) + 185 * intensity;
+      const b = 246 * (1 - intensity) + 180 * intensity;
+      const alpha = 0.4 + intensity * 0.6;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      ctx.stroke();
+    }
+};
+
 // Main component
 const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
   ({ analyserNode, isPlaying, visualizationType }, ref) => {
@@ -172,7 +237,7 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     if(!canvasCtx) return;
 
     // Different visualizers prefer different data
-    if (visualizationType === 'orb') {
+    if (visualizationType === 'orb' || visualizationType === 'petal') {
         analyserNode.fftSize = 512;
     } else { // bars and tunnel
         analyserNode.fftSize = 256;
@@ -208,6 +273,9 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
         case 'tunnel':
           drawTunnel(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
           break;
+        case 'petal':
+            drawPetal(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
+            break;
         default:
           // Clear canvas if type is unknown
           canvasCtx.fillStyle = 'rgba(10, 18, 28, 1)';
