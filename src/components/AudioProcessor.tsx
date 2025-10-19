@@ -128,8 +128,16 @@ export default function AudioProcessor({
       const angle = (time / duration) * 2 * Math.PI;
       const x = Math.cos(angle) * 3; // Panning radius
       const z = Math.sin(angle) * 3;
-      pannerNode.positionX.setValueAtTime(x, audioContext.currentTime);
-      pannerNode.positionZ.setValueAtTime(z, audioContext.currentTime);
+      
+      // Check for setValueAtTime support, fallback for older browsers.
+      if (pannerNode.positionX.setValueAtTime) {
+        pannerNode.positionX.setValueAtTime(x, audioContext.currentTime);
+        pannerNode.positionZ.setValueAtTime(z, audioContext.currentTime);
+      } else {
+        // Fallback for older API versions
+        (pannerNode as any).setPosition(x, 0, z);
+      }
+
 
       animationFrameRef.current = requestAnimationFrame(animate);
     };
