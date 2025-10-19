@@ -197,6 +197,34 @@
     --chart-4: 220 10% 50%;
     --chart-5: 220_15% 95%;
   }
+
+  /* Synthwave Purple */
+  .theme-synthwave-purple {
+    --background: 250 50% 8%;
+    --foreground: 250 30% 95%;
+    --card: 250 50% 8%;
+    --card-foreground: 250 30% 95%;
+    --popover: 250 50% 8%;
+    --popover-foreground: 250 30% 95%;
+    --primary: 280 90% 65%; /* Vibrant Purple */
+    --primary-foreground: 280 90% 10%;
+    --secondary: 260 40% 15%;
+    --secondary-foreground: 250 30% 95%;
+    --muted: 260 40% 12%;
+    --muted-foreground: 250 20% 70%;
+    --accent: 180 90% 50%; /* Neon Cyan */
+    --accent-foreground: 180 90% 5%;
+    --destructive: 340 80% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 260 40% 25%;
+    --input: 260 40% 25%;
+    --ring: 280 90% 65%;
+    --chart-1: 280 90% 65%;
+    --chart-2: 180 90% 50%;
+    --chart-3: 310 85% 60%;
+    --chart-4: 260 95% 70%;
+    --chart-5: 200 80% 55%;
+  }
 }
 
 @layer base {
