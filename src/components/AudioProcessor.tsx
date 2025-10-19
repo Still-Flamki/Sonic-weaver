@@ -293,9 +293,11 @@ export default function AudioProcessor({
     let lastNodeInChain: AudioNode | null = highShelfFilter;
 
     if (shouldUseReverb && lastNodeInChain) {
-        convolverNode = context.createConvolver();
-        const impulse = await createReverbImpulseResponse(context as BaseAudioContext);
-        if (impulse) convolverNode.buffer = impulse;
+        if (!convolverNode || convolverNode.context !== context) {
+            convolverNode = context.createConvolver();
+            const impulse = await createReverbImpulseResponse(context as BaseAudioContext);
+            if (impulse) convolverNode.buffer = impulse;
+        }
 
         dryNode = context.createGain();
         wetNode = context.createGain();
@@ -308,8 +310,9 @@ export default function AudioProcessor({
 
         if (filterNode && pannerNode) {
           dryNode.connect(filterNode);
-          convolverNode.connect(pannerNode);
+          wetNode.connect(convolverNode);
           filterNode.connect(pannerNode);
+          if (convolverNode) convolverNode.connect(pannerNode);
         }
     } else if (lastNodeInChain && filterNode && pannerNode) {
         lastNodeInChain.connect(filterNode);
@@ -518,16 +521,17 @@ export default function AudioProcessor({
             reject(new Error("Visualizer canvas not found"));
             return;
         }
-
-        const renderAudioCtx = new AudioContext();
-        const renderedSource = renderAudioCtx.createBufferSource();
-        renderedSource.buffer = renderedBuffer;
-
-        const mediaStreamDestination = renderAudioCtx.createMediaStreamDestination();
-        renderedSource.connect(mediaStreamDestination);
         
-        const videoStream = canvas.captureStream(30); 
-        const audioStream = mediaStreamDestination.stream;
+        const videoStream = canvas.captureStream(30);
+        
+        const tempAudioCtx = new AudioContext();
+        const audioSource = tempAudioCtx.createBufferSource();
+        audioSource.buffer = renderedBuffer;
+        
+        const audioDestination = tempAudioCtx.createMediaStreamDestination();
+        audioSource.connect(audioDestination);
+
+        const audioStream = audioDestination.stream;
         
         const combinedStream = new MediaStream([
             videoStream.getVideoTracks()[0],
@@ -543,15 +547,15 @@ export default function AudioProcessor({
             }
         };
 
-        recorder.onstop = () => {
+        recorder.onstop = async () => {
             const videoBlob = new Blob(chunks, { type: 'video/webm' });
-            renderAudioCtx.close();
+            await tempAudioCtx.close();
             videoStream.getTracks().forEach(track => track.stop());
             audioStream.getTracks().forEach(track => track.stop());
             resolve(videoBlob);
         };
         
-        renderedSource.onended = () => {
+        audioSource.onended = () => {
             setTimeout(() => {
                 if (recorder.state === 'recording') {
                     recorder.stop();
@@ -560,7 +564,7 @@ export default function AudioProcessor({
         };
 
         recorder.start();
-        renderedSource.start();
+        audioSource.start();
     });
   };
 
@@ -585,11 +589,11 @@ export default function AudioProcessor({
     });
 
     try {
-        const offlineCtx = new OfflineAudioContext(
-            decodedBuffer.numberOfChannels,
-            decodedBuffer.length,
-            decodedBuffer.sampleRate
-        );
+        const offlineCtx = new OfflineAudioContext({
+            numberOfChannels: decodedBuffer.numberOfChannels,
+            length: decodedBuffer.length,
+            sampleRate: decodedBuffer.sampleRate,
+        });
         
         await setupAudioGraph(offlineCtx, offlineCtx.destination);
         
@@ -612,7 +616,7 @@ export default function AudioProcessor({
         const graphGainNode = gainNode;
 
         if (graphPannerNode && graphFilterNode && graphGainNode) {
-            const timeStep = 1 / 120;
+            const timeStep = 1 / 120; // Render at 120fps for smooth curves
             for (let time = 0; time < decodedBuffer.duration; time += timeStep) {
                 const { x, y, z, gain, freq } = getAnimationPath(time);
                 graphPannerNode.positionX.setValueAtTime(x, time);
@@ -623,14 +627,19 @@ export default function AudioProcessor({
             }
         }
         
-        offlineCtx.onstatechange = (event) => {
-            if (event.state === 'running') {
-              const progress = (offlineCtx.currentTime / decodedBuffer.duration) * 100;
-              setRenderProgress(progress);
-            }
-        };
+        offlineSource.start(0);
+
+        let lastProgress = 0;
+        const progressInterval = setInterval(() => {
+          const progress = (offlineCtx.currentTime / decodedBuffer.duration) * 100;
+          if (progress > lastProgress) {
+             setRenderProgress(progress);
+             lastProgress = progress;
+          }
+        }, 250);
 
         const renderedBuffer = await offlineCtx.startRendering();
+        clearInterval(progressInterval);
         setRenderProgress(100);
 
         if (fileType === 'video') {
@@ -645,11 +654,13 @@ export default function AudioProcessor({
             const ffmpeg = ffmpegRef.current;
             
             ffmpeg.on('progress', ({ progress }) => {
-              setRenderProgress(progress * 100);
+              if (progress >= 0 && progress <= 1) {
+                  setRenderProgress(progress * 100);
+              }
             });
             
             if (!ffmpeg.loaded) {
-                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm'
+                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
                 await ffmpeg.load({
                   coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
                   wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -657,7 +668,8 @@ export default function AudioProcessor({
             }
 
             await ffmpeg.writeFile('input.webm', await fetchFile(webmBlob));
-            await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'libx264', 'output.mp4']);
+            // Use ultrafast preset to minimize conversion time
+            await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4']);
             
             const data = await ffmpeg.readFile('output.mp4');
             const mp4Blob = new Blob([data], { type: 'video/mp4' });
@@ -724,6 +736,7 @@ export default function AudioProcessor({
               <div className="flex flex-col items-center text-center">
                 <FileAudio className="mb-4 h-12 w-12 text-primary" />
                 <p className="font-semibold text-foreground">{audioFile.name}</p>
+
                 <p className="text-sm text-muted-foreground">
                   ({(audioFile.size / 1024 / 1024).toFixed(2)} MB)
                 </p>
@@ -919,7 +932,7 @@ export default function AudioProcessor({
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button disabled={!decodedBuffer || isBusy || isRendering} className="relative w-full sm:w-auto overflow-hidden">
-                    {isRendering && (
+                    {isRendering && renderProgress > 0 && (
                         <Progress value={renderProgress} className="absolute inset-0 w-full h-full" />
                     )}
                     <div className="relative flex items-center">
