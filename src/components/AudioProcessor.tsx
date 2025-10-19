@@ -11,6 +11,7 @@ import type { EffectType } from './SonicWeaverApp';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { cn } from '@/lib/utils';
+import { Slider } from '@/components/ui/slider';
 
 interface AudioProcessorProps {
   effectType: EffectType;
@@ -40,6 +41,10 @@ export default function AudioProcessor({
   const [error, setError] = useState<string | null>(null);
   const animationFrameRef = useRef<number>();
   
+  const [customSpeed, setCustomSpeed] = useState(8);
+  const [customWidth, setCustomWidth] = useState(3);
+  const [customReverb, setCustomReverb] = useState(0.25);
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -134,39 +139,43 @@ export default function AudioProcessor({
   };
 
   const getAnimationPath = (time: number) => {
-    const radius = 3;
+    let radius = 3;
+    let duration = 8;
     let path: { x: number; y: number; z: number };
     let freq = 22050; // Default: no filter
     let gain = 1.0;
+    
+    let currentEffect = effectType;
+    if (effectType === 'Custom') {
+        radius = customWidth;
+        duration = 16 - customSpeed; // Inverse relationship: higher speed value means shorter duration
+    }
 
-    switch (effectType) {
+
+    switch (currentEffect) {
       case '4D': {
-        // "Wide Stereo": A clean, wide sweep in front of the listener. No complex automation.
-        const duration = 6;
-        const angle = (Math.PI / duration) * time;
+        const d = 6;
         path = {
-          x: radius * 1.5 * Math.cos(angle - Math.PI / 2),
+          x: 1.5 * radius * Math.cos(time * (Math.PI / d)),
           y: 0,
-          z: -radius * 1.5 * Math.sin(angle) * 0.5, 
+          z: -1.5 * radius * Math.sin(time * (Math.PI / d) * 0.5),
         };
         gain = 1.0;
         freq = 22050;
         break;
       }
       case '8D': {
-        // "Immersive Orbit": A perfect circle at constant speed. No gain automation.
-        const duration = 8;
-        const angle = (2 * Math.PI / duration) * time;
+        const d = 8;
+        const angle = (2 * Math.PI / d) * time;
         path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
         gain = 1.0;
         freq = 22050;
         break;
       }
-      case '11D': {
-        // "Dynamic & Deep": A complex path with pronounced gain and filter automation.
-        const duration = 8;
+      case '11D':
+      case 'Custom': { // Custom uses 11D path with different parameters
         const x = radius * Math.sin((2 * Math.PI / duration) * time);
-        const z = radius * Math.cos((2 * Math.PI / duration) * time); // Corrected to use cos for full front-back motion
+        const z = radius * Math.cos((2 * Math.PI / duration) * time);
         const y = Math.cos((4 * Math.PI / duration) * time) * 0.5; // Vertical component
         path = { x, y, z };
         
@@ -200,16 +209,19 @@ export default function AudioProcessor({
     g.disconnect();
     if (convolverNode) convolverNode.disconnect();
     
-    if (effectType === '11D') {
+    const shouldUseReverb = effectType === '11D' || effectType === 'Custom';
+    const reverbAmount = effectType === 'Custom' ? customReverb : 0.25;
+
+    if (shouldUseReverb) {
         if (!convolverNode) {
             convolverNode = audioContext.createConvolver();
             convolverNode.buffer = await createReverbImpulseResponse(audioContext);
         }
         
         const dryNode = audioContext.createGain();
-        dryNode.gain.value = 0.75;
+        dryNode.gain.value = 1 - reverbAmount;
         const wetNode = audioContext.createGain();
-        wetNode.gain.value = 0.25;
+        wetNode.gain.value = reverbAmount;
 
         gainNode.connect(dryNode);
         gainNode.connect(wetNode);
@@ -444,14 +456,16 @@ export default function AudioProcessor({
 
         offlineSource.connect(offlineGain);
 
+        const shouldUseReverb = effectType === '11D' || effectType === 'Custom';
+        const reverbAmount = effectType === 'Custom' ? customReverb : 0.25;
         let offlineConvolver: ConvolverNode | null = null;
-        if (effectType === '11D') {
+        if (shouldUseReverb) {
             offlineConvolver = offlineCtx.createConvolver();
             offlineConvolver.buffer = await createReverbImpulseResponse(offlineCtx);
             const dryNode = offlineCtx.createGain();
-            dryNode.gain.value = 0.75;
+            dryNode.gain.value = 1 - reverbAmount;
             const wetNode = offlineCtx.createGain();
-            wetNode.gain.value = 0.25;
+            wetNode.gain.value = reverbAmount;
             offlineGain.connect(dryNode);
             offlineGain.connect(wetNode);
             wetNode.connect(offlineConvolver);
@@ -512,6 +526,14 @@ a.remove();
 
   const isBusy = isDecoding || isRendering;
 
+  const handleEffectChange = (value: EffectType) => {
+      stopPreview();
+      setEffectType(value);
+      if (decodedBuffer && !isBusy) {
+        setTimeout(() => playPreview(), 50);
+      }
+  }
+
   return (
     <Card className="w-full shadow-lg bg-card/50 backdrop-blur-sm border-primary/20 shadow-primary/10">
       <CardHeader>
@@ -564,31 +586,95 @@ a.remove();
           <Label>2. Select Effect Type</Label>
           <RadioGroup
             value={effectType}
-            onValueChange={(value: EffectType) => {
-              stopPreview();
-              setEffectType(value);
-              setTimeout(() => {
-                if (decodedBuffer && !isBusy) {
-                   playPreview();
-                }
-              }, 50);
-            }}
-            className="grid grid-cols-3 gap-4"
+            onValueChange={handleEffectChange}
+            className="grid grid-cols-2 md:grid-cols-4 gap-4"
             disabled={isBusy}
           >
-            {(['4D', '8D', '11D'] as const).map(effect => (
-              <Label
-                key={effect}
-                htmlFor={`effect-${effect}`}
-                className="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 transition-all hover:bg-accent/20 hover:border-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary peer-data-[state=checked]:shadow-primary/20 peer-data-[state=checked]:shadow-md [&:has([data-state=checked])]:border-primary"
-              >
-                <RadioGroupItem value={effect} id={`effect-${effect}`} className="sr-only" />
-                <span className="text-lg font-semibold font-headline">{effect}</span>
-                <span className="text-xs text-muted-foreground">Audio</span>
-              </Label>
+            {(['4D', '8D', '11D', 'Custom'] as const).map(effect => (
+                <Label
+                  key={effect}
+                  htmlFor={`effect-${effect}`}
+                  className={cn(
+                    "relative flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 transition-all hover:bg-accent/20 hover:border-accent hover:text-accent-foreground",
+                    effectType === effect && "border-primary shadow-md shadow-primary/20"
+                  )}
+                >
+                  <RadioGroupItem value={effect} id={`effect-${effect}`} className="sr-only" />
+                  <div className={cn(
+                      "absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500/50 transition-all",
+                      effectType === effect ? "bg-red-500 shadow-[0_0_4px_1px] shadow-red-500" : ""
+                  )}></div>
+                  <span className="text-lg font-semibold font-headline">{effect}</span>
+                  <span className="text-xs text-muted-foreground">Audio</span>
+                </Label>
             ))}
           </RadioGroup>
         </div>
+
+        {effectType === 'Custom' && (
+          <Card className="bg-background/30 border-primary/20">
+            <CardHeader>
+                <CardTitle className="font-headline text-xl tracking-tight">Custom Controls</CardTitle>
+                <CardDescription>Fine-tune the audio effect parameters.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-2">
+                <div className="grid gap-2">
+                    <Label htmlFor="speed-slider">Speed</Label>
+                    <Slider
+                        id="speed-slider"
+                        min={1} max={15}
+                        value={[customSpeed]}
+                        onValueChange={(val) => {
+                            stopPreview();
+                            setCustomSpeed(val[0]);
+                            setTimeout(() => playPreview(), 50);
+                        }}
+                        disabled={isBusy}
+                    />
+                     <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Slow</span>
+                        <span>Fast</span>
+                    </div>
+                </div>
+                 <div className="grid gap-2">
+                    <Label htmlFor="width-slider">Width</Label>
+                    <Slider
+                        id="width-slider"
+                        min={1} max={10}
+                        value={[customWidth]}
+                        onValueChange={(val) => {
+                            stopPreview();
+                            setCustomWidth(val[0]);
+                            setTimeout(() => playPreview(), 50);
+                        }}
+                        disabled={isBusy}
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Narrow</span>
+                        <span>Wide</span>
+                    </div>
+                </div>
+                 <div className="grid gap-2">
+                    <Label htmlFor="reverb-slider">Reverb</Label>
+                    <Slider
+                        id="reverb-slider"
+                        min={0} max={1} step={0.05}
+                        value={[customReverb]}
+                        onValueChange={(val) => {
+                            stopPreview();
+                            setCustomReverb(val[0]);
+                            setTimeout(() => playPreview(), 50);
+                        }}
+                        disabled={isBusy}
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Dry</span>
+                        <span>Wet</span>
+                    </div>
+                </div>
+            </CardContent>
+          </Card>
+        )}
         
         {error && (
             <Alert variant="destructive">
@@ -624,3 +710,5 @@ a.remove();
     </Card>
   );
 }
+
+    

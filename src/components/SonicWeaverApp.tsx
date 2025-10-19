@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import AudioProcessor from '@/components/AudioProcessor';
 
-export type EffectType = '4D' | '8D' | '11D';
+export type EffectType = '4D' | '8D' | '11D' | 'Custom';
 
 export default function SonicWeaverApp() {
   const [effectType, setEffectType] = useState<EffectType>('8D');
@@ -22,3 +22,5 @@ export default function SonicWeaverApp() {
     </div>
   );
 }
+
+    
