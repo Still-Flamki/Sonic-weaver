@@ -119,8 +119,8 @@ export default function AudioProcessor({
 
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
-    const duration = 2.5; 
-    const decay = 2.0; // Shorter decay for a cleaner reverb tail
+    const duration = 3.5; 
+    const decay = 2.5; 
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
@@ -142,12 +142,12 @@ export default function AudioProcessor({
     switch (effectType) {
       case '4D': {
         // "Wide Stereo": A clean, wide sweep in front of the listener. No complex automation.
-        const duration = 6; // Slower, smoother sweep
+        const duration = 6;
         const angle = (Math.PI / duration) * time;
         path = {
           x: radius * Math.cos(angle - Math.PI / 2),
           y: 0,
-          z: -radius * Math.sin(angle) * 0.5, // Keep it strictly in front
+          z: -radius * Math.sin(angle) * 0.5, 
         };
         // No gain or filter changes for a pure panning effect.
         break;
@@ -167,20 +167,20 @@ export default function AudioProcessor({
         // "Dynamic & Deep": A complex path with pronounced gain and filter automation.
         const duration = 8;
         const x = radius * Math.sin((2 * Math.PI / duration) * time);
-        const z = radius * Math.sin((4 * Math.PI / duration) * time) * 0.7; // Tighter figure-eight
-        const y = Math.cos((2 * Math.PI / (duration * 2)) * time) * 0.5; // Subtle vertical movement
+        const z = radius * Math.sin((4 * Math.PI / duration) * time); // Make z movement more pronounced
+        const y = Math.cos((2 * Math.PI / (duration * 2)) * time) * 0.5; 
         path = { x, y, z };
         
         // More pronounced gain automation based on distance from center.
         const distance = Math.sqrt(x * x + y * y + z * z);
-        const maxDistance = radius * 1.1; // Allows for slight overshoot
-        gain = 1.0 - (distance / maxDistance) * 0.5; // Attenuate by max 50%
-        gain = Math.max(0.5, Math.min(1.0, gain)); // Clamp gain to prevent silence
+        const maxDistance = radius * 1.2; 
+        gain = 1.0 - (distance / maxDistance) * 0.5; 
+        gain = Math.max(0.5, Math.min(1.0, gain)); 
 
         // More responsive filter automation based on Z position (front/back)
         // Sound is brighter in front, darker behind.
-        const baseFreq = 4000;
-        const freqRange = 10000;
+        const baseFreq = 2500; // Lower base for more dramatic effect
+        const freqRange = 15000;
         const zNormalized = (z + radius) / (2 * radius); // Normalize Z to 0-1
         freq = baseFreq + (zNormalized * freqRange);
         break;
@@ -211,9 +211,9 @@ export default function AudioProcessor({
         }
         
         const dryNode = audioContext.createGain();
-        dryNode.gain.value = 0.8; // More dry signal for clarity
+        dryNode.gain.value = 0.75; // a bit more dry signal for clarity
         const wetNode = audioContext.createGain();
-        wetNode.gain.value = 0.2; // Reverb is subtle, just for space
+        wetNode.gain.value = 0.25; // a bit more reverb
 
         gainNode.connect(dryNode);
         gainNode.connect(wetNode);
@@ -453,9 +453,9 @@ export default function AudioProcessor({
             offlineConvolver = offlineCtx.createConvolver();
             offlineConvolver.buffer = await createReverbImpulseResponse(offlineCtx);
             const dryNode = offlineCtx.createGain();
-            dryNode.gain.value = 0.8;
+            dryNode.gain.value = 0.75;
             const wetNode = offlineCtx.createGain();
-            wetNode.gain.value = 0.2;
+            wetNode.gain.value = 0.25;
             offlineGain.connect(dryNode);
             offlineGain.connect(wetNode);
             wetNode.connect(offlineConvolver);

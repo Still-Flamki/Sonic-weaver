@@ -5,8 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Play, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { PlaceHolderImages, ImagePlaceholder } from '@/lib/placeholder-images';
-import Image from 'next/image';
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -22,10 +20,6 @@ export default function AudioDemo() {
   const buffer = useRef<AudioBuffer | null>(null);
   const animationFrameRef = useRef<number>();
   const { toast } = useToast();
-
-  const beforeImage = PlaceHolderImages.find(p => p.id === 'demo-cover-before');
-  const afterImage = PlaceHolderImages.find(p => p.id === 'demo-cover-after');
-
 
   useEffect(() => {
     if (!audioContext) {
@@ -93,8 +87,8 @@ export default function AudioDemo() {
 
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
-    const duration = 2.5;
-    const decay = 2.0; // Slightly shorter decay for less "weirdness"
+    const duration = 3.5;
+    const decay = 2.5;
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
@@ -116,20 +110,20 @@ export default function AudioDemo() {
     // 11D: Figure-eight path with pronounced dynamics and filtering
     const duration = 8;
     const x = radius * Math.sin((2 * Math.PI / duration) * time);
-    const z = radius * Math.sin((4 * Math.PI / duration) * time) * 0.7; // Tighter figure-eight
-    const y = Math.cos((2 * Math.PI / (duration * 2)) * time) * 0.5; // Subtle vertical movement
+    const z = radius * Math.sin((4 * Math.PI / duration) * time); // Make z movement more pronounced
+    const y = Math.cos((2 * Math.PI / (duration * 2)) * time) * 0.5;
     path = { x, y, z };
     
     // Gain automation based on distance from center.
     const distance = Math.sqrt(x * x + y * y + z * z);
-    const maxDistance = radius * 1.1; // Allows for slight overshoot
-    gain = 1.0 - (distance / maxDistance) * 0.5; // Attenuate by max 50%
-    gain = Math.max(0.5, Math.min(1.0, gain)); // Clamp gain to prevent silence
+    const maxDistance = radius * 1.2;
+    gain = 1.0 - (distance / maxDistance) * 0.5;
+    gain = Math.max(0.5, Math.min(1.0, gain));
 
     // Filter automation based on Z position (front/back)
     // Sound is brighter in front, darker behind.
-    const baseFreq = 4000;
-    const freqRange = 10000;
+    const baseFreq = 2500; // Lower base for more dramatic effect
+    const freqRange = 15000;
     const zNormalized = (z + radius) / (2 * radius); // Normalize Z to 0-1
     freq = baseFreq + (zNormalized * freqRange);
     
@@ -152,9 +146,9 @@ export default function AudioDemo() {
     }
     
     const dryNode = audioContext.createGain();
-    dryNode.gain.value = 0.8; // More dry signal for clarity
+    dryNode.gain.value = 0.75; // a bit more dry signal for clarity
     const wetNode = audioContext.createGain();
-    wetNode.gain.value = 0.2; // Reverb is subtle, just for space
+    wetNode.gain.value = 0.25; // a bit more reverb
 
     // Route audio through the effect chain
     gainNode.connect(dryNode);
@@ -269,7 +263,6 @@ export default function AudioDemo() {
         description="Original Mono Audio"
         isPlaying={isPlaying && activePlayer === 'before'}
         onTogglePlay={() => togglePlay('before')}
-        coverImage={beforeImage}
       />
       <DemoPlayerCard
         title="After"
@@ -277,7 +270,6 @@ export default function AudioDemo() {
         isPlaying={isPlaying && activePlayer === 'after'}
         onTogglePlay={() => togglePlay('after')}
         isEnhanced
-        coverImage={afterImage}
       />
     </div>
   );
@@ -289,7 +281,6 @@ interface DemoPlayerCardProps {
   isPlaying: boolean;
   onTogglePlay: () => void;
   isEnhanced?: boolean;
-  coverImage?: ImagePlaceholder;
 }
 
 function DemoPlayerCard({
@@ -298,7 +289,6 @@ function DemoPlayerCard({
   isPlaying,
   onTogglePlay,
   isEnhanced,
-  coverImage,
 }: DemoPlayerCardProps) {
   const Icon = isPlaying ? Pause : Play;
   return (
@@ -309,7 +299,7 @@ function DemoPlayerCard({
       </CardHeader>
       <CardContent className="flex flex-col items-center justify-center gap-4 pt-4 pb-8">
         <div className={`relative w-48 h-48 flex items-center justify-center rounded-lg overflow-hidden ${isEnhanced ? 'bg-primary/10' : 'bg-muted/50'}`}>
-          <p className="text-muted-foreground text-sm font-mono">{isEnhanced ? '< 11D Processed >' : '< Mono Source >'}</p>
+           <p className="text-muted-foreground text-sm font-mono">{isEnhanced ? '< 11D Processed >' : '< Mono Source >'}</p>
         </div>
         <Button onClick={onTogglePlay} size="lg" variant={isEnhanced ? 'default' : 'outline'} className="w-48">
           <Icon className="mr-2 h-5 w-5" />
