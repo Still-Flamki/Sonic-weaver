@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, forwardRef } from 'react';
 
-export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'fabric' | 'skyline' | 'chromatic' | 'kaleidoscope';
+export type VisualizationType = 'orb' | 'bars' | 'tunnel' | 'fabric' | 'skyline' | 'chromatic' | 'kaleidoscope' | 'bloom';
 
 interface AudioVisualizerProps {
   analyserNode: AnalyserNode | null;
@@ -483,6 +483,97 @@ const drawChromatic = (
     ctx.restore();
 };
 
+const drawBloom = (
+    ctx: CanvasRenderingContext2D,
+    analyser: AnalyserNode,
+    dataArray: Uint8Array,
+    width: number,
+    height: number,
+    time: number
+  ) => {
+    analyser.getByteTimeDomainData(dataArray);
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(freqData);
+  
+    ctx.fillStyle = 'rgba(10, 18, 28, 0.2)';
+    ctx.fillRect(0, 0, width, height);
+  
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const bufferLength = dataArray.length;
+  
+    const bass = freqData.slice(0, 5).reduce((s, v) => s + v, 0) / 5 / 255;
+    const mids = freqData.slice(10, 30).reduce((s, v) => s + v, 0) / 20 / 255;
+    const treble = freqData.slice(50, 100).reduce((s, v) => s + v, 0) / 50 / 255;
+  
+    const numPetals = 4 + Math.floor(bass * 8);
+    const rotation = time * 0.0002;
+  
+    // Central Orb
+    const coreRadius = 10 + bass * 30;
+    const coreGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreRadius);
+    coreGradient.addColorStop(0, `rgba(255, 220, 180, ${0.3 + treble * 0.5})`);
+    coreGradient.addColorStop(1, 'rgba(10, 18, 28, 0)');
+    ctx.fillStyle = coreGradient;
+    ctx.fillRect(0,0,width,height);
+  
+  
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotation);
+  
+    for (let i = 0; i < numPetals; i++) {
+      ctx.save();
+      ctx.rotate((i / numPetals) * Math.PI * 2);
+  
+      ctx.beginPath();
+      let moved = false;
+  
+      const petalLength = width * 0.2 * (1 + bass * 0.5);
+      const petalWidth = height * 0.05 * (1 + mids * 1.5);
+  
+      // Draw one half of the petal
+      for (let j = 0; j < bufferLength; j += 4) {
+        const v = dataArray[j] / 128.0; // 0-2
+        const x = (j / bufferLength) * petalLength;
+        const y = (v - 1) * petalWidth;
+  
+        if (!moved) {
+          ctx.moveTo(coreRadius / 2, 0);
+          moved = true;
+        } else {
+          ctx.lineTo(coreRadius / 2 + x, y);
+        }
+      }
+      
+      // Draw the other half mirrored
+      for (let j = bufferLength - 1; j >= 0; j -= 4) {
+        const v = dataArray[j] / 128.0; // 0-2
+        const x = (j / bufferLength) * petalLength;
+        const y = (v - 1) * petalWidth;
+  
+        ctx.lineTo(coreRadius / 2 + x, -y);
+      }
+  
+      ctx.closePath();
+      
+      const r = 150 + Math.floor(mids * 105);
+      const g = 80 + Math.floor(mids * 150);
+      const b = 200 - Math.floor(bass * 50);
+      const alpha = 0.1 + (bass + mids) / 2 * 0.4;
+  
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      ctx.fill();
+      
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(${r+50}, ${g+50}, ${b+50}, ${alpha + 0.2})`;
+      ctx.stroke();
+  
+      ctx.restore();
+    }
+  
+    ctx.restore();
+  };
 
 // Main component
 const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
@@ -506,9 +597,9 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
     if(!canvasCtx) return;
 
     // Different visualizers prefer different data
-    if (['orb', 'petal', 'chromatic', 'kaleidoscope', 'fabric'].includes(visualizationType)) {
+    if (['orb', 'kaleidoscope', 'fabric', 'bloom'].includes(visualizationType)) {
         analyserNode.fftSize = 1024;
-    } else { // bars, tunnel, skyline
+    } else { // bars, tunnel, skyline, chromatic
         analyserNode.fftSize = 256;
     }
     const bufferLength = analyserNode.frequencyBinCount;
@@ -553,6 +644,9 @@ const AudioVisualizer = forwardRef<HTMLCanvasElement, AudioVisualizerProps>(
             break;
         case 'kaleidoscope':
             drawKaleidoscope(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
+            break;
+        case 'bloom':
+            drawBloom(canvasCtx, analyserNode, dataArray, width, height, timeRef.current);
             break;
         default:
           // Clear canvas if type is unknown

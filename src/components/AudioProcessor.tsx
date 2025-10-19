@@ -811,6 +811,7 @@ export default function AudioProcessor({
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="fabric">Quantum Fabric</SelectItem>
+                        <SelectItem value="bloom">Fractal Bloom</SelectItem>
                         <SelectItem value="kaleidoscope">Kaleidoscopic Echoes</SelectItem>
                         <SelectItem value="chromatic">Chromatic Aberration</SelectItem>
                         <SelectItem value="skyline">Neon Skyline</SelectItem>
