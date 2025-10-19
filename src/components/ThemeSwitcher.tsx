@@ -6,26 +6,25 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const themes = [
-  { name: 'Dark', value: 'dark' },
-  { name: 'Light', value: 'light' },
-  { name: 'Fire & Gold', value: 'theme-fire-gold' },
-  { name: 'Ocean & Sky', value: 'theme-ocean-sky' },
-  { name: 'Earth & Sky', value: 'theme-earth-sky' },
-  { name: 'Hell & Heaven', value: 'theme-hell-heaven' },
-  { name: 'Silver', value: 'theme-silver' },
+  { name: 'Dark', value: 'dark', bg: 'hsl(var(--background))' },
+  { name: 'Light', value: 'light', bg: 'hsl(var(--background))' },
+  { name: 'Fire & Gold', value: 'theme-fire-gold', bg: 'linear-gradient(135deg, hsl(35, 95%, 55%), hsl(5, 80%, 50%))' },
+  { name: 'Ocean & Sky', value: 'theme-ocean-sky', bg: 'linear-gradient(135deg, hsl(195, 90%, 50%), hsl(220, 40%, 25%))' },
+  { name: 'Earth & Sky', value: 'theme-earth-sky', bg: 'linear-gradient(135deg, hsl(95, 60%, 45%), hsl(30, 30%, 30%))' },
+  { name: 'Hell & Heaven', value: 'theme-hell-heaven', bg: 'linear-gradient(135deg, hsl(0, 90%, 55%), hsl(45, 100%, 90%))' },
+  { name: 'Silver', value: 'theme-silver', bg: 'linear-gradient(135deg, hsl(220, 15%, 75%), hsl(220, 10%, 25%))' },
 ];
 
 export function ThemeSwitcher() {
   const [mounted, setMounted] = useState(false);
   const { theme, setTheme, resolvedTheme } = useTheme();
 
-  // useEffect only runs on the client, so now we can safely show the UI
   useEffect(() => {
     setMounted(true);
   }, []);
 
   if (!mounted) {
-    // Return a placeholder or null to avoid hydration mismatch
+    // Render a placeholder on the server and during hydration to avoid mismatch
     return <div className="h-6 w-full max-w-[200px] animate-pulse rounded-full bg-muted/50" />;
   }
 
@@ -44,11 +43,11 @@ export function ThemeSwitcher() {
                   isActive ? 'scale-110 border-primary' : 'border-transparent'
                 )}
                 style={{
-                  background: `hsl(var(--${t.value === 'dark' || t.value === 'light' ? 'background' : t.value + '-bg'}))`,
+                  background: t.value === 'dark' || t.value === 'light' ? (t.bg) : t.bg,
                 }}
                 aria-label={`Switch to ${t.name} theme`}
               >
-                 <div className={cn("h-full w-full rounded-full", !isActive && "border-2 border-background/50")}/>
+                 <div className={cn("h-full w-full rounded-full", t.value === 'dark' || t.value === 'light' ? 'border-2 border-foreground/30' : '')}/>
               </button>
             </TooltipTrigger>
             <TooltipContent>
