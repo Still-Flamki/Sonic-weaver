@@ -110,16 +110,16 @@ export default function AudioProcessor({
 
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
-    const duration = 2; // seconds
-    const decay = 3;
+    const duration = 2.5; // Slightly longer reverb tail
+    const decay = 2;
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
 
     for (let i = 0; i < impulse.length; i++) {
-      const n = i / impulse.length;
-      left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
-      right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+        const n = i / impulse.length;
+        left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+        right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
     }
     return impulse;
   };
@@ -127,50 +127,42 @@ export default function AudioProcessor({
   const getAnimationPath = (time: number) => {
     const radius = 3;
     let path: { x: number; y: number; z: number };
-    let freq = 4000;
+    let freq = 4400; // Base frequency for filter
     let gain = 1.0;
 
     switch (effectType) {
       case '4D': {
-        const duration = 4; // Simple L-R sweep
-        const angle = (time / duration) * Math.PI;
-        path = { x: radius * Math.cos(angle), y: 0, z: -1 };
+        // Smooth L-R sweep in front
+        const duration = 4;
+        const angle = Math.PI + Math.cos((2 * Math.PI / duration) * time) * (Math.PI / 2);
+        path = { x: radius * Math.cos(angle), y: 0, z: radius * Math.sin(angle) };
         break;
       }
       case '8D': {
-        const duration = 8; // Circular path
-        const angle = (time / duration) * 2 * Math.PI;
+        // Perfect circular path around the listener
+        const duration = 8;
+        const angle = (2 * Math.PI / duration) * time;
         path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
         break;
       }
       case '11D': {
-        const duration = 8; // Complex path
-        const segmentDuration = duration / 4;
-        const segment = Math.floor((time % duration) / segmentDuration);
-        const segmentTime = (time % duration) - (segment * segmentDuration);
-        const progress = segmentTime / segmentDuration;
-        const zRadius = radius * 1.5;
-        let x = 0, y = 0, z = 0;
-        
-        switch(segment) {
-          case 0: // Right to Front
-            x = radius * (1 - progress);
-            z = -zRadius * progress;
-            break;
-          case 1: // Front to Left
-            x = -radius * progress;
-            z = -zRadius * (1 - progress);
-            break;
-          case 2: // Left to Back
-            x = -radius * (1 - progress);
-            z = zRadius * progress;
-            break;
-          case 3: // Back to Right
-            x = radius * progress;
-            z = zRadius * (1 - progress);
-            break;
-        }
+        // Smooth figure-eight pattern with subtle reverb and filtering
+        const duration = 8;
+        const zRadius = 2;
+        const x = radius * Math.sin((2 * Math.PI / duration) * time);
+        const z = zRadius * Math.sin((4 * Math.PI / duration) * time);
+        const y = 0; // Keep it on the listener's plane for clarity
+
         path = { x, y, z };
+        
+        // Dynamic gain based on distance to make it feel more natural
+        const distance = Math.sqrt(x * x + y * y + z * z);
+        gain = 1.0 - (distance / (radius * 1.5));
+        gain = Math.max(0.4, gain); // Ensure it doesn't get too quiet
+
+        // Subtle filtering
+        freq = 3000 + (z * 500);
+
         break;
       }
       default:
@@ -187,30 +179,28 @@ export default function AudioProcessor({
     const f = filterNode;
     const g = gainNode;
     
-    // Disconnect previous connections to be safe
     g.disconnect();
     f.disconnect();
     p.disconnect();
     if (convolverNode) convolverNode.disconnect();
 
     if (effectType === '11D') {
-      if (!convolverNode) {
-        convolverNode = audioContext.createConvolver();
-        convolverNode.buffer = await createReverbImpulseResponse(audioContext);
-      }
-      
-      const dryNode = audioContext.createGain();
-      dryNode.gain.value = 0.7; 
-      const wetNode = audioContext.createGain();
-      wetNode.gain.value = 0.3; 
+        if (!convolverNode) {
+            convolverNode = audioContext.createConvolver();
+            convolverNode.buffer = await createReverbImpulseResponse(audioContext);
+        }
+        
+        const dryNode = audioContext.createGain();
+        dryNode.gain.value = 0.8; 
+        const wetNode = audioContext.createGain();
+        wetNode.gain.value = 0.2; 
 
-      gainNode.connect(dryNode);
-      gainNode.connect(wetNode);
-      wetNode.connect(convolverNode);
-      convolverNode.connect(audioContext.destination);
-      dryNode.connect(f);
-      f.connect(p);
-
+        gainNode.connect(dryNode);
+        gainNode.connect(wetNode);
+        wetNode.connect(convolverNode);
+        convolverNode.connect(audioContext.destination);
+        dryNode.connect(f);
+        f.connect(p);
     } else {
         gainNode.connect(f);
         f.connect(p);
@@ -229,11 +219,12 @@ export default function AudioProcessor({
       const time = audioContext.currentTime - startTime;
       const { x, y, z, gain: newGain, freq } = getAnimationPath(time);
       
-      p.positionX.linearRampToValueAtTime(x, audioContext.currentTime + 0.05);
-      p.positionY.linearRampToValueAtTime(y, audioContext.currentTime + 0.05);
-      p.positionZ.linearRampToValueAtTime(z, audioContext.currentTime + 0.05);
-      f.frequency.linearRampToValueAtTime(freq, audioContext.currentTime + 0.05);
-      g.gain.linearRampToValueAtTime(newGain, audioContext.currentTime + 0.05);
+      const rampTime = audioContext.currentTime + 0.1;
+      p.positionX.linearRampToValueAtTime(x, rampTime);
+      p.positionY.linearRampToValueAtTime(y, rampTime);
+      p.positionZ.linearRampToValueAtTime(z, rampTime);
+      f.frequency.linearRampToValueAtTime(freq, rampTime);
+      g.gain.linearRampToValueAtTime(newGain, rampTime);
       
       animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -433,9 +424,9 @@ export default function AudioProcessor({
             offlineConvolver = offlineCtx.createConvolver();
             offlineConvolver.buffer = await createReverbImpulseResponse(offlineCtx);
             const dryNode = offlineCtx.createGain();
-            dryNode.gain.value = 0.7;
+            dryNode.gain.value = 0.8;
             const wetNode = offlineCtx.createGain();
-            wetNode.gain.value = 0.3;
+            wetNode.gain.value = 0.2;
             offlineGain.connect(dryNode);
             offlineGain.connect(wetNode);
             wetNode.connect(offlineConvolver);

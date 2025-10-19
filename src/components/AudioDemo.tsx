@@ -5,8 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Play, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-import Image from 'next/image';
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -21,9 +19,6 @@ export default function AudioDemo() {
   const buffer = useRef<AudioBuffer | null>(null);
   const animationFrameRef = useRef<number>();
   const { toast } = useToast();
-
-  const beforeImage = PlaceHolderImages.find(p => p.id === 'demo-cover-before');
-  const afterImage = PlaceHolderImages.find(p => p.id === 'demo-cover-after');
 
   useEffect(() => {
     if (!audioContext) {
@@ -82,52 +77,39 @@ export default function AudioDemo() {
 
   const createReverbImpulseResponse = async (context: BaseAudioContext): Promise<AudioBuffer> => {
     const rate = context.sampleRate;
-    const duration = 2; // seconds
-    const decay = 3;
+    const duration = 2.5;
+    const decay = 2;
     const impulse = context.createBuffer(2, duration * rate, rate);
     const left = impulse.getChannelData(0);
     const right = impulse.getChannelData(1);
 
     for (let i = 0; i < impulse.length; i++) {
-      const n = i / impulse.length;
-      left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
-      right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+        const n = i / impulse.length;
+        left[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+        right[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
     }
     return impulse;
   };
 
   const getAnimationPath = (time: number) => {
     const radius = 3;
-    const zRadius = radius * 1.5;
-    const duration = 8; // Right -> Front -> Left -> Back -> Loop
-    const segmentDuration = duration / 4;
-    const segment = Math.floor((time % duration) / segmentDuration);
-    const segmentTime = (time % duration) - (segment * segmentDuration);
-    const progress = segmentTime / segmentDuration;
-
-    let x = 0, y = 0, z = 0;
+    const zRadius = 2;
     
-    switch(segment) {
-      case 0: // Right to Front
-        x = radius * (1 - progress);
-        z = -zRadius * progress;
-        break;
-      case 1: // Front to Left
-        x = -radius * progress;
-        z = -zRadius * (1 - progress);
-        break;
-      case 2: // Left to Back
-        x = -radius * (1 - progress);
-        z = zRadius * progress;
-        break;
-      case 3: // Back to Right
-        x = radius * progress;
-        z = zRadius * (1 - progress);
-        break;
-    }
+    // 11D: Smooth figure-eight pattern with subtle reverb and filtering
+    const duration = 8;
+    const x = radius * Math.sin((2 * Math.PI / duration) * time);
+    const z = zRadius * Math.sin((4 * Math.PI / duration) * time);
+    const y = 0; // Keep it on the listener's plane for clarity
+
     const path = { x, y, z };
-    const gain = 1.0;
-    const freq = 4000;
+
+    // Dynamic gain based on distance to make it feel more natural
+    const distance = Math.sqrt(x * x + y * y + z * z);
+    let gain = 1.0 - (distance / (radius * 1.5));
+    gain = Math.max(0.4, gain); // Ensure it doesn't get too quiet
+
+    // Subtle filtering
+    const freq = 3000 + (z * 500);
 
     return { ...path, gain, freq };
   };
@@ -150,18 +132,20 @@ export default function AudioDemo() {
         convolverNode.buffer = await createReverbImpulseResponse(audioContext);
     }
     
+    // Create a more balanced wet/dry mix for the reverb
     const dryNode = audioContext.createGain();
-    dryNode.gain.value = 0.7;
+    dryNode.gain.value = 0.8;
     const wetNode = audioContext.createGain();
-    wetNode.gain.value = 0.3;
+    wetNode.gain.value = 0.2;
 
     gainNode.connect(dryNode);
     gainNode.connect(wetNode);
+
     wetNode.connect(convolverNode);
     convolverNode.connect(audioContext.destination);
+
     dryNode.connect(f);
     f.connect(p);
-    
     p.connect(audioContext.destination);
 
     const startTime = audioContext.currentTime;
@@ -175,11 +159,12 @@ export default function AudioDemo() {
       const time = audioContext.currentTime - startTime;
       const { x, y, z, gain: newGain, freq } = getAnimationPath(time);
 
-      p.positionX.linearRampToValueAtTime(x, audioContext.currentTime + 0.05);
-      p.positionY.linearRampToValueAtTime(y, audioContext.currentTime + 0.05);
-      p.positionZ.linearRampToValueAtTime(z, audioContext.currentTime + 0.05);
-      f.frequency.linearRampToValueAtTime(freq, audioContext.currentTime + 0.05);
-      g.gain.linearRampToValueAtTime(newGain, audioContext.currentTime + 0.05);
+      const rampTime = audioContext.currentTime + 0.1;
+      p.positionX.linearRampToValueAtTime(x, rampTime);
+      p.positionY.linearRampToValueAtTime(y, rampTime);
+      p.positionZ.linearRampToValueAtTime(z, rampTime);
+      f.frequency.linearRampToValueAtTime(freq, rampTime);
+      g.gain.linearRampToValueAtTime(newGain, rampTime);
 
       animationFrameRef.current = requestAnimationFrame(animate);
     };
@@ -260,7 +245,6 @@ export default function AudioDemo() {
         description="Original Mono Audio"
         isPlaying={isPlaying && activePlayer === 'before'}
         onTogglePlay={() => togglePlay('before')}
-        coverImage={beforeImage}
       />
       <DemoPlayerCard
         title="After"
@@ -268,7 +252,6 @@ export default function AudioDemo() {
         isPlaying={isPlaying && activePlayer === 'after'}
         onTogglePlay={() => togglePlay('after')}
         isEnhanced
-        coverImage={afterImage}
       />
     </div>
   );
@@ -280,7 +263,6 @@ interface DemoPlayerCardProps {
   isPlaying: boolean;
   onTogglePlay: () => void;
   isEnhanced?: boolean;
-  coverImage?: { imageUrl: string; description: string; imageHint: string };
 }
 
 function DemoPlayerCard({
@@ -289,7 +271,6 @@ function DemoPlayerCard({
   isPlaying,
   onTogglePlay,
   isEnhanced,
-  coverImage,
 }: DemoPlayerCardProps) {
   const Icon = isPlaying ? Pause : Play;
   return (
@@ -300,18 +281,7 @@ function DemoPlayerCard({
       </CardHeader>
       <CardContent className="flex flex-col items-center justify-center gap-4 pt-4 pb-8">
         <div className={`relative w-48 h-48 flex items-center justify-center rounded-lg overflow-hidden ${isEnhanced ? 'bg-primary/10' : 'bg-muted/50'}`}>
-           {coverImage ? (
-             <Image 
-              src={coverImage.imageUrl}
-              alt={coverImage.description}
-              width={192}
-              height={192}
-              className="object-cover w-full h-full"
-              data-ai-hint={coverImage.imageHint}
-             />
-           ) : (
             <p className="text-muted-foreground text-sm font-mono">{isEnhanced ? '< 11D Processed >' : '< Mono Source >'}</p>
-           )}
         </div>
         <Button onClick={onTogglePlay} size="lg" variant={isEnhanced ? 'default' : 'outline'} className="w-48">
           <Icon className="mr-2 h-5 w-5" />
