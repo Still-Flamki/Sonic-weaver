@@ -33,7 +33,7 @@ export default {
       }),
       fontFamily: {
         body: ['Roboto', 'sans-serif'],
-        headline: ['Orbitron', 'sans-serif'],
+        headline: ['Rye', 'serif'],
         code: ['monospace'],
       },
       colors: {
