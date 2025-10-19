@@ -147,80 +147,76 @@ export default function AudioGame() {
                 data-ai-hint={gameImage.imageHint}
             />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-background via-background/70 to-transparent"></div>
-        <div className="relative grid md:grid-cols-2">
-            <CardContent className="p-8 md:p-10 flex flex-col justify-between min-h-[450px]">
-                <div>
-                  <CardTitle className="font-headline text-2xl tracking-tight mb-2">
-                    Where is the sound?
-                  </CardTitle>
-                  <div className="flex items-center gap-4 text-lg font-semibold">
-                      <span>Score: {score} / 5</span>
-                  </div>
-                </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/50"></div>
+        
+        <div className="relative flex flex-col justify-center items-center text-center p-8 md:p-10 min-h-[500px]">
+            <div className="w-full">
+              <CardTitle className="font-headline text-2xl tracking-tight mb-2">
+                Where is the sound?
+              </CardTitle>
+              <div className="flex items-center justify-center gap-4 text-lg font-semibold">
+                  <span>Score: {score} / 5</span>
+              </div>
+            </div>
 
-                {gameState === 'idle' && (
-                    <div className="flex flex-col items-center justify-center h-full gap-4">
-                        <p className="text-muted-foreground text-center">Press Start to begin the game. <br/> Headphones are required!</p>
-                        <Button onClick={startRound} size="lg">
-                            <Play className="mr-2 h-5 w-5" />
-                            Start Game
-                        </Button>
-                    </div>
-                )}
-                
-                {(gameState === 'playing' || gameState === 'guessing' || gameState === 'feedback') && (
-                    <div className="relative aspect-square max-w-[300px] mx-auto my-6">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="h-24 w-24 rounded-full bg-primary/20 flex items-center justify-center">
-                                <Volume2 className="h-12 w-12 text-primary animate-pulse" />
-                            </div>
+            {gameState === 'idle' && (
+                <div className="flex flex-col items-center justify-center h-full gap-4 my-8">
+                    <p className="text-muted-foreground text-center max-w-xs">Press Start to begin the game. <br/> Headphones are required!</p>
+                    <Button onClick={startRound} size="lg">
+                        <Play className="mr-2 h-5 w-5" />
+                        Start Game
+                    </Button>
+                </div>
+            )}
+            
+            {(gameState === 'playing' || gameState === 'guessing' || gameState === 'feedback') && (
+                <div className="relative aspect-square max-w-[300px] w-full mx-auto my-6 flex-1 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="h-24 w-24 rounded-full bg-primary/20 flex items-center justify-center">
+                            <Volume2 className="h-12 w-12 text-primary animate-pulse" />
                         </div>
-                        {(Object.keys(locations) as SoundLocation[]).map((loc, i) => {
-                            const angle = (i * 90) - 45;
-                            const feedbackForThisButton = feedback && feedback.guess === loc;
-                            const isCorrect = feedbackForThisButton && feedback.correct;
-                            const isIncorrect = feedbackForThisButton && !feedback.correct;
-                            return (
-                                <Button
-                                    key={loc}
-                                    variant="outline"
-                                    size="lg"
-                                    onClick={() => handleGuess(loc)}
-                                    disabled={gameState !== 'guessing'}
-                                    className={cn(
-                                        "absolute w-32 h-16 transition-all duration-300",
-                                        isCorrect && "bg-green-500/80 border-green-400 text-white",
-                                        isIncorrect && "bg-destructive/80 border-destructive-foreground/50 text-white"
-                                    )}
-                                    style={{
-                                        top: '50%',
-                                        left: '50%',
-                                        transform: `translate(-50%, -50%) translate(${Math.cos(angle * Math.PI / 180) * 120}px, ${Math.sin(angle * Math.PI / 180) * 120}px)`
-                                    }}
-                                >
-                                    {feedbackForThisButton && (
-                                      isCorrect ? <CheckCircle className="mr-2 h-5 w-5" /> : <XCircle className="mr-2 h-5 w-5" />
-                                    )}
-                                    {loc.split(' ')[1]}
-                                </Button>
-                            );
-                        })}
                     </div>
-                )}
-
-
-                <div className="flex justify-center mt-auto">
-                    { gameState !== 'idle' && 
-                        <Button variant="ghost" onClick={() => playSoundAtLocation(currentLocation!)} disabled={!currentLocation || gameState !== 'guessing'}>
-                            <Volume2 className="mr-2 h-4 w-4" />
-                            Replay Sound
-                        </Button>
-                    }
+                    {(Object.keys(locations) as SoundLocation[]).map((loc, i) => {
+                        const angle = (i * 90) - 45;
+                        const feedbackForThisButton = feedback && feedback.guess === loc;
+                        const isCorrect = feedbackForThisButton && feedback.correct;
+                        const isIncorrect = feedbackForThisButton && !feedback.correct;
+                        return (
+                            <Button
+                                key={loc}
+                                variant="outline"
+                                size="lg"
+                                onClick={() => handleGuess(loc)}
+                                disabled={gameState !== 'guessing'}
+                                className={cn(
+                                    "absolute w-32 h-16 transition-all duration-300",
+                                    isCorrect && "bg-green-500/80 border-green-400 text-white",
+                                    isIncorrect && "bg-destructive/80 border-destructive-foreground/50 text-white"
+                                )}
+                                style={{
+                                    top: '50%',
+                                    left: '50%',
+                                    transform: `translate(-50%, -50%) translate(${Math.cos(angle * Math.PI / 180) * 120}px, ${Math.sin(angle * Math.PI / 180) * 120}px)`
+                                }}
+                            >
+                                {feedbackForThisButton && (
+                                  isCorrect ? <CheckCircle className="mr-2 h-5 w-5" /> : <XCircle className="mr-2 h-5 w-5" />
+                                )}
+                                {loc.split(' ')[1]}
+                            </Button>
+                        );
+                    })}
                 </div>
-            </CardContent>
-            {/* The right column is now primarily for spacing on desktop */}
-            <div className="hidden md:block"></div>
+            )}
+
+            <div className="w-full mt-auto">
+                { gameState !== 'idle' && 
+                    <Button variant="ghost" onClick={() => playSoundAtLocation(currentLocation!)} disabled={!currentLocation || gameState !== 'guessing'}>
+                        <Volume2 className="mr-2 h-4 w-4" />
+                        Replay Sound
+                    </Button>
+                }
+            </div>
         </div>
       </Card>
     </div>
