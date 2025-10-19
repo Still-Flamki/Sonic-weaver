@@ -2,6 +2,7 @@ import { Info, Music4 } from 'lucide-react';
 import Link from 'next/link';
 import { InfoModal } from '../InfoModal';
 import { Button } from '../ui/button';
+import { ThemeSwitcher } from '../ThemeSwitcher';
 
 export function Header() {
   return (
@@ -15,12 +16,15 @@ export function Header() {
             Sonic Weaver
           </h1>
         </Link>
-        <InfoModal>
-           <Button variant="outline" size="icon">
-                <Info className="h-5 w-5" />
-                <span className="sr-only">About Effects</span>
-            </Button>
-        </InfoModal>
+        <div className="flex items-center gap-2">
+            <ThemeSwitcher />
+            <InfoModal>
+               <Button variant="outline" size="icon">
+                    <Info className="h-5 w-5" />
+                    <span className="sr-only">About Effects</span>
+                </Button>
+            </InfoModal>
+        </div>
       </div>
     </header>
   );
