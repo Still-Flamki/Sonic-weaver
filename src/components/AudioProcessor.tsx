@@ -126,28 +126,30 @@ export default function AudioProcessor({
 
   const getAnimationPath = (time: number) => {
     const radius = 3;
-    const zRadius = radius * 1.5;
-    let duration: number;
     let path: { x: number; y: number; z: number };
+    let freq = 4000;
+    let gain = 1.0;
 
     switch (effectType) {
-      case '4D':
-        duration = 4; // Clean right-to-left sweep
-        const angle4d = (time / duration) * Math.PI;
-        path = { x: Math.cos(angle4d) * radius, y: 0, z: -1 };
+      case '4D': {
+        const duration = 4; // Simple L-R sweep
+        const angle = (time / duration) * Math.PI;
+        path = { x: radius * Math.cos(angle), y: 0, z: -1 };
         break;
-      case '8D':
-        duration = 8; // Professional circular path
-        const angle8d = (time / duration) * 2 * Math.PI;
-        path = { x: Math.sin(angle8d) * radius, y: 0, z: Math.cos(angle8d) * radius };
+      }
+      case '8D': {
+        const duration = 8; // Circular path
+        const angle = (time / duration) * 2 * Math.PI;
+        path = { x: radius * Math.sin(angle), y: 0, z: radius * Math.cos(angle) };
         break;
-      case '11D':
-        duration = 8; // Right -> Front -> Left -> Back -> Loop
+      }
+      case '11D': {
+        const duration = 8; // Complex path
         const segmentDuration = duration / 4;
         const segment = Math.floor((time % duration) / segmentDuration);
         const segmentTime = (time % duration) - (segment * segmentDuration);
         const progress = segmentTime / segmentDuration;
-
+        const zRadius = radius * 1.5;
         let x = 0, y = 0, z = 0;
         
         switch(segment) {
@@ -170,13 +172,11 @@ export default function AudioProcessor({
         }
         path = { x, y, z };
         break;
+      }
       default:
         path = { x: 0, y: 0, z: 0 };
     }
     
-    const gain = 1;
-    const freq = 1000;
-
     return { ...path, gain, freq };
   };
 

@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Play, Pause } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
+import Image from 'next/image';
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -19,6 +21,9 @@ export default function AudioDemo() {
   const buffer = useRef<AudioBuffer | null>(null);
   const animationFrameRef = useRef<number>();
   const { toast } = useToast();
+
+  const beforeImage = PlaceHolderImages.find(p => p.id === 'demo-cover-before');
+  const afterImage = PlaceHolderImages.find(p => p.id === 'demo-cover-after');
 
   useEffect(() => {
     if (!audioContext) {
@@ -121,8 +126,8 @@ export default function AudioDemo() {
         break;
     }
     const path = { x, y, z };
-    const gain = 1;
-    const freq = 1000;
+    const gain = 1.0;
+    const freq = 4000;
 
     return { ...path, gain, freq };
   };
@@ -146,9 +151,9 @@ export default function AudioDemo() {
     }
     
     const dryNode = audioContext.createGain();
-    dryNode.gain.value = 0.6;
+    dryNode.gain.value = 0.7;
     const wetNode = audioContext.createGain();
-    wetNode.gain.value = 0.4;
+    wetNode.gain.value = 0.3;
 
     gainNode.connect(dryNode);
     gainNode.connect(wetNode);
@@ -255,6 +260,7 @@ export default function AudioDemo() {
         description="Original Mono Audio"
         isPlaying={isPlaying && activePlayer === 'before'}
         onTogglePlay={() => togglePlay('before')}
+        coverImage={beforeImage}
       />
       <DemoPlayerCard
         title="After"
@@ -262,6 +268,7 @@ export default function AudioDemo() {
         isPlaying={isPlaying && activePlayer === 'after'}
         onTogglePlay={() => togglePlay('after')}
         isEnhanced
+        coverImage={afterImage}
       />
     </div>
   );
@@ -273,6 +280,7 @@ interface DemoPlayerCardProps {
   isPlaying: boolean;
   onTogglePlay: () => void;
   isEnhanced?: boolean;
+  coverImage?: { imageUrl: string; description: string; imageHint: string };
 }
 
 function DemoPlayerCard({
@@ -281,6 +289,7 @@ function DemoPlayerCard({
   isPlaying,
   onTogglePlay,
   isEnhanced,
+  coverImage,
 }: DemoPlayerCardProps) {
   const Icon = isPlaying ? Pause : Play;
   return (
@@ -289,9 +298,20 @@ function DemoPlayerCard({
         <CardTitle className="font-headline text-2xl tracking-tight">{title}</CardTitle>
         <p className="text-sm text-muted-foreground">{description}</p>
       </CardHeader>
-      <CardContent className="flex flex-col items-center justify-center gap-4 pt-8 pb-8">
-        <div className={`relative w-48 h-24 flex items-center justify-center rounded-lg ${isEnhanced ? 'bg-primary/10 border-2 border-primary' : 'bg-muted/50 border-2 border-input'}`}>
+      <CardContent className="flex flex-col items-center justify-center gap-4 pt-4 pb-8">
+        <div className={`relative w-48 h-48 flex items-center justify-center rounded-lg overflow-hidden ${isEnhanced ? 'bg-primary/10' : 'bg-muted/50'}`}>
+           {coverImage ? (
+             <Image 
+              src={coverImage.imageUrl}
+              alt={coverImage.description}
+              width={192}
+              height={192}
+              className="object-cover w-full h-full"
+              data-ai-hint={coverImage.imageHint}
+             />
+           ) : (
             <p className="text-muted-foreground text-sm font-mono">{isEnhanced ? '< 11D Processed >' : '< Mono Source >'}</p>
+           )}
         </div>
         <Button onClick={onTogglePlay} size="lg" variant={isEnhanced ? 'default' : 'outline'} className="w-48">
           <Icon className="mr-2 h-5 w-5" />
