@@ -600,12 +600,14 @@ a.remove();
                   )}
                 >
                   <RadioGroupItem value={effect} id={`effect-${effect}`} className="sr-only" />
-                  <div className={cn(
-                      "absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500/50 transition-all",
-                      effectType === effect ? "bg-red-500 shadow-[0_0_4px_1px] shadow-red-500" : ""
-                  )}></div>
-                  <span className="text-lg font-semibold font-headline">{effect}</span>
-                  <span className="text-xs text-muted-foreground">Audio</span>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className={cn(
+                        "h-2 w-2 rounded-full bg-red-500/50 transition-all",
+                        effectType === effect ? "bg-red-500 shadow-[0_0_4px_1px] shadow-red-500" : ""
+                    )}></div>
+                    <span className="text-lg font-semibold font-headline">{effect}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground mt-1">Audio</span>
                 </Label>
             ))}
           </RadioGroup>
@@ -710,5 +712,3 @@ a.remove();
     </Card>
   );
 }
-
-    
